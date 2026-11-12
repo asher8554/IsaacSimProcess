@@ -8,12 +8,23 @@ r"""실행: C:\isaacsim-6.2\python.bat factory_line_demo.py [--headless] [--seco
 
 ROS 2는 쓰지 않는다. 박스는 물리 없는 시각용 큐브이고 그리퍼 위치를 따라다닐 뿐이다.
 
-Kawasaki의 적재 동작은 두 가지 방식으로 적혀 있고 --motion으로 고른다.
-- --motion time  (기본)  "몇 초에 어디"를 적은 시간표 방식. palletize_target 참고.
-- --motion rapid         ABB RAPID처럼 "좌표·속도·zone·tool"로 적은 방식. palletize_program 참고.
+로봇 동작은 두 가지 방식으로 적혀 있고 --motion으로 고른다. 장면과 박스는 같다.
+- --motion time  (기본)  "몇 초에 어디"를 적은 시간표 방식. scan_target, palletize_target, AMMR_KEYS 참고.
+- --motion rapid         ABB RAPID처럼 "목표·속도·zone·tool"로 적은 방식. 네 로봇 모두 프로그램으로 움직인다.
+                         scan_program, palletize_program, ammr_program, patrol_program 참고.
+
+실행 중에 물체를 클릭하면 그 물체 윗면 가운데 좌표가 robtarget 한 줄로 출력된다 (on_stage_event 참고).
 """
 
 import argparse
+import os
+
+# 이 스크립트의 수치 계산은 6x6 이하의 작은 행렬뿐이다. numpy·scipy·torch가 계산용 스레드를 여러 개 띄우면
+# 도움은 안 되고 물리·화면 스레드와 CPU를 다투기만 한다. 1개로 묶으면 RAPID 방식이 실시간 대비 0.32배에서
+# 0.47배로, 시간표 방식이 0.68배에서 0.75배로 빨라졌다 (14초 헤드리스 실측). Isaac Sim을 띄우기 전에 정해야 적용된다.
+# 사용자가 환경 변수로 이미 값을 정해 두었으면 그 값을 따른다.
+for _name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_name, "1")
 
 from isaacsim import SimulationApp
 
@@ -32,7 +43,6 @@ args, _ = parser.parse_known_args()
 simulation_app = SimulationApp({"headless": args.headless})
 
 import math
-import os
 import time
 import traceback
 
@@ -48,7 +58,28 @@ from isaacsim.core.simulation_manager.impl.isaac_events import IsaacEvents
 from isaacsim.robot.policy.examples import RobotPolicyRunner, get_h1_spec
 from isaacsim.storage.native import get_assets_root_path
 from omni.kit.viewport.utility import capture_viewport_to_file, get_active_viewport
-from rapid_style import MoveL, Offs, RapidTask, SetDO, WaitTime, WaitUntil, fine, robtarget, tooldata, v1000, v1500, z50
+import omni.usd
+from pxr import Usd, UsdGeom
+from rapid_style import (
+    MoveAbsJ,
+    MoveBase,
+    MoveL,
+    Offs,
+    RapidTask,
+    SetDO,
+    WaitTime,
+    WaitUntil,
+    basetarget,
+    fine,
+    jointtarget,
+    robtarget,
+    tooldata,
+    v500,
+    v1000,
+    v1500,
+    z50,
+    z500,
+)
 from scipy.spatial.transform import Rotation
 
 # ------------------------------------------------------------------ 라인 배치
@@ -64,6 +95,7 @@ RELEASE = 4.6  # [s] 택트가 시작된 뒤 박스를 놓기까지 걸리는 �
 PALLET_TOP = 0.143  # [m] 바닥에서 팔레트 윗면까지 높이 (pallet.usd 실측)
 PALLET_OUT = (3.2, -1.5)  # [m] (x, y) 로봇 B가 박스를 쌓는 팔레트의 중심
 PALLET_BUF = (-3.0, -1.5)  # [m] (x, y) AMMR이 다녀오는 출하 버퍼 팔레트의 중심
+AMMR_HOME = (PALLET_OUT[0], -3.0)  # [m] (x, y) AMMR을 처음 놓는 위치. 적재 팔레트 앞 통로다
 SLOT_X = (-0.4, 0.0, 0.4)  # [m] 팔레트 중심에서 박스 3칸 각각까지의 x 거리
 START_T = -2.0  # [s] 시작 시각. 첫 박스가 집히기 2초 전 상태에서 시작한다
 DOWN = np.array([0.0, 0.0, -1.0])  # [단위 없음] (x, y, z) 아래를 가리키는 길이 1짜리 방향 벡터
@@ -222,19 +254,14 @@ def box_positions(t, gripper_pos):
 
 
 # ------------------------------------------------------------------ RAPID 방식 (--motion rapid)
-# 위 palletize_target은 "몇 초에 어디"를 적은 시간표다. 같은 적재 동작을 ABB RAPID처럼
-# "어디로(robtarget), 얼마나 빨리(speed), 어떻게 지나서(zone), 무엇으로(tool)"라고 적은 것이 아래다.
+# 위쪽 함수들은 "몇 초에 어디"를 적은 시간표다. 같은 동작을 ABB RAPID처럼
+# "어디로(target), 얼마나 빨리(speed), 어떻게 지나서(zone), 무엇으로(tool)"라고 적은 것이 아래 프로그램들이다.
 # 명령의 뜻과 ABB와 다른 점은 rapid_style.py 맨 위에 적혀 있다.
+# 프로그램이 쓰는 목표(pPick, bOut 등)와 공구(tGripper 등)는 장면을 다 읽은 뒤에 등록한다.
+# 아래쪽 "RAPID 방식의 목표·공구 등록" 구역에 있다.
 
 io = {"doGrip": 0}  # 출력 신호. doGrip이 1이면 그리퍼가 쥔 상태다
 cell = {"held": None, "placed": {}, "log": []}  # held는 쥐고 있는 박스 번호, placed는 {박스 번호: 놓인 [m] 좌표}
-
-# tooldata. Kawasaki 손끝 링크(gripper_center)에서 본 TCP의 [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다.
-# 링크의 +Z(공구가 뻗는 방향)로 GAP만큼 나간 점을 TCP로 잡았다. 그래서 목표 좌표에 "박스 윗면"을 그대로 적는다.
-tGripper = tooldata(0.0, 0.0, GAP, 0.0, 0.0, 0.0)
-# robtarget. [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. rx = 180은 공구가 바닥을 보는 자세다.
-pPick = robtarget(X_OUT, 0.0, BELT_Z + BOX, 180.0, 0.0, 0.0)  # 벨트 끝에 온 박스의 윗면
-pPallet = robtarget(PALLET_OUT[0], PALLET_OUT[1], PALLET_TOP + BOX, 180.0, 0.0, 0.0)  # 팔레트 가운데 칸 박스의 윗면
 
 
 def waiting_box(t):
@@ -252,6 +279,22 @@ def box_at_pick():
     return waiting_box(state["t"]) is not None
 
 
+def box_at_scan():
+    """벨트 위 박스가 검사 시작 위치(pScanStart)를 막 지났으면 True. RAPID의 디지털 입력에 해당한다."""
+    for b in range(6):
+        u = (state["t"] - b * TAKT) % (6 * TAKT)
+        if u >= 3 * TAKT and 0.0 <= X_IN + BELT_V * (u - 3 * TAKT) - pScanStart["pos"][0] < 0.05:
+            return True
+    return False
+
+
+# --- yield가 낯설다면
+# 보통 함수는 return을 만나면 끝난다. yield가 들어 있는 함수는 다르다. yield를 만나면 그 값(명령 하나)을
+# 내놓고 "그 자리에서 멈춰 기다린다". 다음에 다시 부르면 멈췄던 바로 다음 줄부터 이어서 실행한다.
+# 그래서 아래 프로그램은 "명령을 한 줄씩 내놓는 목록"처럼 동작한다. 실행기 RapidTask가 명령 하나를 받아
+# 로봇이 그 동작을 끝낼 때까지 여러 물리 스텝에 걸쳐 실행하고, 끝나면 다음 명령을 달라고 한다.
+# RAPID에서 MoveL 한 줄이 끝나야 프로그램 포인터(PP)가 다음 줄로 넘어가는 것과 같다.
+# while True 안에 있으므로 마지막 줄까지 가면 처음으로 돌아가 끝없이 되풀이한다 (WHILE TRUE DO ... ENDWHILE).
 def palletize_program():
     """Kawasaki 적재 프로그램. 같은 내용을 RAPID로 쓰면 아래와 같다 (단위만 mm에서 m로 다르다).
 
@@ -291,6 +334,63 @@ def palletize_program():
         yield WaitTime(0.3)  # 놓는 시간
         yield MoveL(Offs(pPlace, 0.0, 0.0, 0.60), v1000, z50, tGripper)  # 빈손으로 올린다
         slot = (slot + 1) % 3  # 다음 칸
+
+
+def scan_program():
+    """KUKA 검사 프로그램. 지나가는 박스 위 10 cm에서 박스와 나란히 이동한 뒤 돌아온다.
+
+        PROC Scan()
+          WHILE TRUE DO
+            MoveL Offs(pScanStart, 0, 0, 400), v1000, z50, tScanner;
+            MoveL pScanStart, v1000, fine, tScanner;
+            WaitUntil diBoxAtScan = 1;
+            MoveL pScanEnd, vBelt, fine, tScanner;
+            MoveL Offs(pScanEnd, 0, 0, 400), v1000, z50, tScanner;
+          ENDWHILE
+        ENDPROC
+
+    컨베이어 트래킹은 아니다. 박스가 시작 위치에 온 것을 신호로 받아 벨트와 같은 속도(vBelt)로 직선 이동할 뿐이다.
+    """
+    vBelt = BELT_V  # [m/s] 벨트와 같은 속도. speeddata를 직접 만든 것이다
+    while True:
+        yield MoveL(Offs(pScanStart, 0.0, 0.0, 0.40), v1000, z50, tScanner)  # 시작 위치 40 cm 위로 돌아온다
+        yield MoveL(pScanStart, v1000, fine, tScanner)  # 박스가 지나갈 높이로 내려가 정확히 선다
+        yield WaitUntil(box_at_scan)  # 박스가 바로 아래에 올 때까지 기다린다
+        yield MoveL(pScanEnd, vBelt, fine, tScanner)  # 박스와 같은 속도로 나란히 간다
+        yield MoveL(Offs(pScanEnd, 0.0, 0.0, 0.40), v1000, z50, tScanner)  # 올라간다
+
+
+def ammr_program():
+    """AMMR 프로그램. 적재 팔레트와 출하 버퍼 사이를 오가며 도착할 때마다 팔을 뻗었다 접는다.
+
+    MoveBase가 몸체(바퀴 베이스)를, MoveAbsJ가 그 위의 팔 7축을 움직인다. 모두 fine이라 실제로 도착한 뒤에
+    다음 줄로 넘어간다. MoveBase는 RAPID에 없는 명령이지만 모양은 MoveL과 같다 (목표, 속도, zone).
+    제자리 회전은 x, y가 같고 rz만 다른 목표를 주면 된다.
+    """
+    while True:
+        yield MoveBase(bOut, v500, fine)  # 적재 팔레트 앞에서 팔레트 쪽(+y)을 보고 선다
+        yield MoveAbsJ(jReach, 45.0, fine)  # 팔을 앞으로 뻗는다. 45는 [deg/s]
+        yield WaitTime(1.0)
+        yield MoveAbsJ(jTuck, 45.0, fine)  # 팔을 접는다
+        yield MoveBase(basetarget(AMMR_HOME[0], AMMR_HOME[1], 180.0), v500, fine)  # 제자리에서 갈 방향(-x)으로 돈다
+        yield MoveBase(basetarget(PALLET_BUF[0], AMMR_HOME[1], 180.0), v500, fine)  # 버퍼 앞까지 직진한다
+        yield MoveBase(bBuf, v500, fine)  # 버퍼 팔레트 쪽(+y)을 보고 선다
+        yield MoveAbsJ(jReach, 45.0, fine)
+        yield WaitTime(1.0)
+        yield MoveAbsJ(jTuck, 45.0, fine)
+        yield MoveBase(basetarget(PALLET_BUF[0], AMMR_HOME[1], 0.0), v500, fine)  # 제자리에서 갈 방향(+x)으로 돈다
+        yield MoveBase(basetarget(AMMR_HOME[0], AMMR_HOME[1], 0.0), v500, fine)  # 적재 팔레트 앞까지 직진한다
+
+
+def patrol_program():
+    """H1 순찰 프로그램. 순찰 지점 네 곳을 차례로 걸어서 돈다.
+
+    H1은 걷는 로봇이라 MoveBase의 뜻이 조금 다르다. 목표 쪽으로 몸을 돌려 걸어가고, 도착 방향 rz는 맞추지 않는다.
+    z500이라 지점 0.5 m 안에 들어오면 멈추지 않고 다음 지점으로 향한다. 속도는 정책이 학습된 0 ~ 1 m/s 안에서 준다.
+    """
+    while True:
+        for x, y in H1_WAYPOINTS:
+            yield MoveBase(basetarget(x, y, 0.0), v500, z500)
 
 
 def box_positions_rapid(t, tcp_pos):
@@ -338,13 +438,13 @@ def link_pose(arm):
     return pos.numpy()[0], Rotation.from_quat([x, y, z, w])  # Isaac Sim은 (w, x, y, z), scipy는 (x, y, z, w) 순서다
 
 
-def ik_step_pose(arm, tool, target_pos, target_rot, t):
+def ik_step_pose(arm, tool, target_pos, target_rot, link_pos, link_rot, t):
     """TCP를 목표 위치와 방향으로 보내는 미분 IK 한 스텝. RAPID 방식 명령이 쓴다.
 
     ik_step과 다른 점은 두 가지다. 손끝 링크가 아니라 tooldata로 정한 TCP를 맞추고,
     공구 축 방향만이 아니라 방향 전체 (rx, ry, rz)를 맞춘다.
+    link_pos, link_rot은 link_pose(arm)으로 읽은 손끝 링크의 지금 실제 자세다.
     """
-    link_pos, link_rot = link_pose(arm)
     reach = link_rot.apply(tool["pos"])  # [m] 손끝 링크 원점에서 TCP까지의 벡터 (월드 기준)
     tcp_pos, tcp_rot = link_pos + reach, link_rot * tool["rot"]
     error = np.concatenate([target_pos - tcp_pos, (target_rot * tcp_rot.inv()).as_rotvec()])
@@ -376,16 +476,31 @@ def ik_step(arm, target, t):
         arm["aligns"].append(float(axis @ DOWN))
 
 
-def walk_command():
-    """H1을 다음 순찰 지점으로 보내는 [전진 속도, 횡 속도, 회전 속도] 명령."""
+def h1_pose():
+    """H1 몸체의 지금 실제 자세를 ([m] x, [m] y, [rad] 바라보는 방향)으로 돌려준다."""
     pos, quat = h1.articulation.get_world_poses()
     (x, y, _), (qw, qx, qy, qz) = pos.numpy()[0], quat.numpy()[0]
+    return x, y, math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+
+
+def walk_command(pose, goal, speed=0.5):
+    """H1을 [m] goal (x, y)로 보내는 [전진 속도, 횡 속도, 회전 속도] 명령. goal이 None이면 제자리에 선다.
+
+    목표 방향과 몸 방향의 차이가 0.6 rad 미만이면 [m/s] speed로 걷고, 크면 제자리에서 돈다.
+    """
+    if goal is None:
+        return np.zeros(3, dtype=np.float32)
+    x, y, yaw = pose
+    turn = (math.atan2(goal[1] - y, goal[0] - x) - yaw + math.pi) % (2 * math.pi) - math.pi
+    return np.array([speed if abs(turn) < 0.6 else 0.0, 0.0, np.clip(1.5 * turn, -0.7, 0.7)], dtype=np.float32)
+
+
+def patrol_goal(pose):
+    """시간표 방식의 순찰. 지금 향하는 순찰 지점을 돌려주고, 0.5 m 안에 들어왔으면 다음 지점으로 바꿔 둔다."""
     gx, gy = H1_WAYPOINTS[state["waypoint"]]
-    if math.hypot(gx - x, gy - y) < 0.5:
+    if math.hypot(gx - pose[0], gy - pose[1]) < 0.5:
         state["waypoint"] = (state["waypoint"] + 1) % len(H1_WAYPOINTS)
-    yaw = math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
-    turn = (math.atan2(gy - y, gx - x) - yaw + math.pi) % (2 * math.pi) - math.pi
-    return np.array([0.5 if abs(turn) < 0.6 else 0.0, 0.0, np.clip(1.5 * turn, -0.7, 0.7)], dtype=np.float32)
+    return gx, gy
 
 
 # ------------------------------------------------------------------ 장면 구성
@@ -482,7 +597,7 @@ add("/Isaac/Robots/Kuka/KR210_L150/kr210_l150.usd", "/World/Kuka", (-1.0, 2.2, 0
 # Kawasaki. 컨베이어 끝 너머에 놓고 -135도 돌려 집는 곳과 팔레트의 중간 방향을 보게 한다.
 add("/Isaac/Robots/Kawasaki/RS080N/rs080n_onrobot_rg2.usd", "/World/Kawasaki", (3.2, 0.0, 0.0), yaw=-1.5 * H)
 # AMMR. 적재 팔레트에서 -y 쪽으로 1.5 m 떨어진 통로에 놓는다. 이 위치가 AMMR 주행 좌표의 원점 (0, 0)이 된다.
-add("/Isaac/Robots/Clearpath/RidgebackFranka/ridgeback_franka.usd", "/World/AMMR", (PALLET_OUT[0], -3.0, 0.0))
+add("/Isaac/Robots/Clearpath/RidgebackFranka/ridgeback_franka.usd", "/World/AMMR", (*AMMR_HOME, 0.0))
 
 
 def make_arm(prim_path, ee_link, tool_axis, home):
@@ -539,11 +654,88 @@ while stage_utils.is_stage_loading():
 # 시작 화면의 카메라를 정한다. eye는 [m] 카메라가 있는 곳, target은 [m] 카메라가 바라보는 점이다.
 ViewportManager.set_camera_view("/OmniverseKit_Persp", eye=[8.5, -8.0, 6.0], target=[0.0, 0.5, 0.8])
 
+# ------------------------------------------------------------------ RAPID 방식의 목표·공구 등록
+# RobotStudio에서는 물체 윗면에 스냅을 걸고 클릭해서 타깃을 찍는다. 여기서 같은 일을 하는 방법은 세 가지다.
+#   1. snap_top("/World/물체경로")     코드에서 물체 윗면 가운데를 바로 robtarget으로 받는다. 아래 pPallet이 그 예다.
+#   2. 실행 중에 물체를 클릭한다        터미널에 "[TEACH] robtarget(...)" 한 줄이 찍힌다. 그 줄을 복사해 여기에 붙인다.
+#                                      찍힌 자리에는 빨간 표시가 생긴다. 아래 on_stage_event가 이 일을 한다.
+#   3. 숫자를 직접 적는다               벨트 끝처럼 물체가 아니라 "라인에서 정한 위치"일 때 쓴다. 아래 pPick이 그 예다.
+stage = stage_utils.get_current_stage()
+
+
+def snap_top(prim_path, rx=180.0, ry=0.0, rz=0.0):
+    """물체의 "윗면 가운데"를 robtarget으로 돌려준다. RobotStudio에서 Snap Center로 물체 윗면을 찍는 것에 해당한다.
+
+    prim_path는 Stage 창에 보이는 경로다. 물체를 감싸는 상자(바운딩 박스)의 윗면 중심을 쓴다.
+    (rx, ry, rz)는 [deg] 그 점에서의 공구 방향이고, 기본값은 공구가 바닥을 보는 자세다.
+    형상이 없는 프림(빈 Xform, 조명)이면 None을 돌려준다.
+    """
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim.IsValid():
+        return None
+    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_, UsdGeom.Tokens.render])
+    box = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+    if box.IsEmpty():
+        return None
+    low, high = box.GetMin(), box.GetMax()
+    return robtarget((low[0] + high[0]) / 2, (low[1] + high[1]) / 2, high[2], rx, ry, rz)
+
+
+# tooldata. 손끝 링크에서 본 TCP의 [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. TCP의 Z축이 공구가 뻗는 방향이다.
+# Kawasaki. 손끝 링크(gripper_center)의 +Z가 공구 방향이라 회전은 0이다. 그 방향으로 GAP만큼 나간 점을 TCP로 잡았다.
+# 그래서 목표 좌표에 "박스 윗면"을 그대로 적으면 된다.
+tGripper = tooldata(0.0, 0.0, GAP, 0.0, 0.0, 0.0)
+# KUKA. 손끝 링크(tool0)는 +X가 공구 방향이다. y축으로 90도 돌려 TCP의 Z축을 그 방향에 맞춘다.
+tScanner = tooldata(0.0, 0.0, 0.0, 0.0, 90.0, 0.0)
+
+# robtarget. [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. rx = 180은 공구가 바닥을 보는 자세다.
+pPallet = Offs(snap_top("/World/PalletOut"), 0.0, 0.0, BOX)  # 팔레트 윗면 가운데를 스냅으로 찍고, 박스 한 개 높이만큼 올린 점
+pPick = robtarget(X_OUT, 0.0, BELT_Z + BOX, 180.0, 0.0, 0.0)  # 벨트 끝에 온 박스의 윗면. 박스가 서는 위치는 라인에서 정한 값이다
+pScanStart = robtarget(-1.45, 0.0, BELT_Z + BOX + 0.10, 180.0, 0.0, 0.0)  # 검사를 시작하는 점. 박스 윗면에서 10 cm 위
+pScanEnd = Offs(pScanStart, 0.90, 0.0, 0.0)  # 검사를 끝내는 점. 벨트 방향으로 0.9 m 간 곳
+
+# jointtarget. [deg] AMMR 팔 7축의 각도다. 시간표 방식이 쓰는 TUCK, REACH([rad])와 같은 자세다.
+jTuck = jointtarget(*np.degrees(TUCK))  # (0, -57.3, 0, -137.5, 0, 91.7, 45.0) 접은 자세
+jReach = jointtarget(*np.degrees(REACH))  # (0, 43.0, 0, -74.5, 0, 117.5, 45.0) 앞으로 뻗은 자세
+
+# basetarget. [m] 몸체 위치 (x, y)와 [deg] 바라보는 방향 rz다 (0이 +x, 90이 +y).
+bOut = basetarget(AMMR_HOME[0], AMMR_HOME[1], 90.0)  # 적재 팔레트 앞. 팔레트를 본다
+bBuf = basetarget(PALLET_BUF[0], AMMR_HOME[1], 90.0)  # 출하 버퍼 팔레트 앞. 버퍼를 본다
+
 # ------------------------------------------------------------------ 실행
 # 실행 중에 바뀌는 값들. t는 [s] 시뮬레이션 시각, first는 "재생 후 첫 스텝인가", waypoint는 H1이 향하는
 # 순찰 지점 번호, error는 물리 콜백에서 난 오류 내용이다.
-# task는 RAPID 방식일 때 Kawasaki 프로그램을 실행하는 RapidTask다.
-state = {"t": START_T, "first": True, "waypoint": 0, "error": None, "task": None}
+# tasks는 RAPID 방식일 때 로봇마다의 프로그램을 실행하는 RapidTask들이다. ammr_x는 방금 AMMR에 보낸 [m] 베이스 x 목표,
+# boxes는 방금 계산한 박스 6개의 [m] 좌표, taught는 마지막으로 클릭해서 찍은 (물체 경로, [m] 좌표)다.
+state = {"t": START_T, "first": True, "waypoint": 0, "error": None, "tasks": None, "ammr_x": 0.0, "boxes": None, "taught": None}
+
+# ------------------------------------------------------------------ 클릭으로 좌표 찍기 (티칭)
+# 뷰포트나 Stage 창에서 물체를 클릭하면 그 물체 윗면 가운데 좌표가 robtarget 한 줄로 출력된다.
+# 재생 중이든 일시정지 중이든 된다. 움직이는 박스는 일시정지(Ⅱ)한 뒤 클릭하면 그 순간의 위치가 찍힌다.
+teach_marker = Cube("/World/TeachMarker", sizes=0.04, colors=[1.0, 0.1, 0.1], positions=[[0.0, 0.0, -1.0]])  # 찍힌 자리 표시
+
+
+def on_stage_event(event):
+    """선택이 바뀔 때마다 불린다. 선택한 물체의 윗면 가운데를 찍어 출력하고 빨간 표시를 옮긴다."""
+    if event.type != int(omni.usd.StageEventType.SELECTION_CHANGED):
+        return
+    paths = omni.usd.get_context().get_selection().get_selected_prim_paths()
+    if not paths or paths[0] == "/World/TeachMarker":
+        return
+    target = snap_top(paths[0])
+    if target is None:
+        return
+    x, y, z = target["pos"]
+    line = f"robtarget({x:.3f}, {y:.3f}, {z:.3f}, 180.0, 0.0, 0.0)  # {paths[0]} 윗면 가운데"
+    print("[TEACH] " + line, flush=True)  # 실행한 터미널에 찍힌다
+    carb.log_warn("[TEACH] " + line)  # Isaac Sim 창의 Console 탭에도 찍힌다
+    teach_marker.set_world_poses(positions=[target["pos"]])
+    state["taught"] = (paths[0], target["pos"])
+
+
+teach_subscription = omni.usd.get_context().get_stage_event_stream().create_subscription_to_pop(
+    on_stage_event, name="factory_line_demo teach"
+)
 
 
 def on_physics_step(dt, context):
@@ -567,7 +759,13 @@ def on_physics_step(dt, context):
             for arm in (kuka, kawasaki):
                 arm["q_cmd"] = arm["home"].copy()  # IK가 적분해 가는 지령 관절각도 시작 자세로 되돌린다
             # RAPID 방식의 프로그램·신호·박스 상태도 처음으로 되돌린다. 프로그램은 첫 줄부터 다시 시작한다.
-            state["task"] = RapidTask(palletize_program(), io)
+            # 로봇마다 태스크가 하나씩이다. H1은 걷는 로봇이라 walk=True로 만든다.
+            state["tasks"] = {
+                "kuka": RapidTask(scan_program(), io),
+                "kawasaki": RapidTask(palletize_program(), io),
+                "ammr": RapidTask(ammr_program(), io),
+                "h1": RapidTask(patrol_program(), io, walk=True),
+            }
             io["doGrip"] = 0
             cell.update(held=None, placed={})
             for robot in (kuka["robot"], kawasaki["robot"], ammr):
@@ -578,17 +776,35 @@ def on_physics_step(dt, context):
         # --- 매 스텝. 시계를 dt만큼 진행시키고, 그 시각에 맞는 목표를 로봇마다 보낸다.
         state["t"] += dt
         t = state["t"]
-        ik_step(kuka, scan_target(t), t)  # KUKA 손끝을 "지나가는 박스 위" 좌표로 보낸다
+        pose = h1_pose()  # H1의 지금 실제 자세 ([m] x, [m] y, [rad] 방향)
         if args.motion == "rapid":
-            # RAPID 방식. 프로그램을 dt만큼 진행시켜 "지금 TCP가 있어야 할 자세"를 받고, 그 자세로 TCP를 보낸다.
-            tcp_pos, tcp_rot, tool = state["task"].step(dt, *link_pose(kawasaki))
-            ik_step_pose(kawasaki, tool, tcp_pos, tcp_rot, t)
+            # --- RAPID 방식. 로봇마다 프로그램을 dt만큼 진행시키고, 프로그램이 내놓은 "지금 있어야 할 상태"로 보낸다.
+            tasks = state["tasks"]
+            # 팔 두 대. 프로그램이 지령 TCP 자세를 내놓고, IK가 TCP를 그 자세로 보낸다.
+            for arm, name in ((kuka, "kuka"), (kawasaki, "kawasaki")):
+                link_pos, link_rot = link_pose(arm)  # 손끝 링크의 지금 실제 자세
+                tasks[name].step(dt, tcp=(link_pos, link_rot))
+                ik_step_pose(arm, tasks[name].tool, tasks[name].pos, tasks[name].rot, link_pos, link_rot, t)
+            # AMMR. 프로그램이 지령 몸체 자세(월드 좌표)와 지령 팔 관절각을 내놓는다.
+            # 베이스 관절값은 처음 놓은 자리(AMMR_HOME)가 0이므로 월드 좌표에서 그만큼 빼고 더한다.
+            q = ammr.get_dof_positions().numpy()[0]
+            tasks["ammr"].step(dt, base=(q[0] + AMMR_HOME[0], q[1] + AMMR_HOME[1], q[2]), joints=q[3:10])
+            base, arm_joints = tasks["ammr"].base, tasks["ammr"].joints
+            ammr_targets = [base[0] - AMMR_HOME[0], base[1] - AMMR_HOME[1], base[2], *arm_joints]
+            # H1. 프로그램은 "어디로 얼마나 빨리 걸어가라"는 목표만 내놓는다. 걷는 것은 보행 정책이 한다.
+            tasks["h1"].step(dt, base=pose)
+            goal = tasks["h1"].goal
+            command = walk_command(pose, None) if goal is None else walk_command(pose, goal[0], goal[1])
         else:
-            # 시간표 방식. Kawasaki 손끝을 "집기 → 놓기" 경로 위의 좌표로 보낸다.
-            ik_step(kawasaki, palletize_target(t), t)
-        # AMMR 관절 10개(베이스 3 + 팔 7)에 이 시각의 키프레임 값을 목표로 보낸다. 손가락 2개는 건드리지 않는다.
-        ammr.set_dof_position_targets(path(AMMR_KEYS, t), dof_indices=list(range(10)))
-        h1.step(dt, walk_command())  # H1 정책에 속도 명령을 넘긴다. 관절 19개의 목표는 정책이 계산한다
+            # --- 시간표 방식. 지금 시각 t에 해당하는 목표를 시간표에서 꺼내 보낸다.
+            ik_step(kuka, scan_target(t), t)  # KUKA 손끝을 "지나가는 박스 위" 좌표로 보낸다
+            ik_step(kawasaki, palletize_target(t), t)  # Kawasaki 손끝을 "집기 → 놓기" 경로 위의 좌표로 보낸다
+            ammr_targets = path(AMMR_KEYS, t)  # AMMR은 이 시각의 키프레임 값
+            command = walk_command(pose, patrol_goal(pose))  # H1은 다음 순찰 지점 쪽으로
+        # AMMR 관절 10개(베이스 3 + 팔 7)에 목표를 보낸다. 손가락 2개는 건드리지 않는다.
+        ammr.set_dof_position_targets(ammr_targets, dof_indices=list(range(10)))
+        state["ammr_x"] = ammr_targets[0]
+        h1.step(dt, command)  # H1 정책에 속도 명령을 넘긴다. 관절 19개의 목표는 정책이 계산한다
     except Exception:  # noqa: BLE001 - 물리 콜백은 예외를 밖으로 던지면 안 된다
         # 오류 내용을 저장해 두면 아래 메인 루프가 그것을 보고 멈춘다.
         state["error"] = traceback.format_exc()
@@ -610,6 +826,7 @@ shots = [6.0, 16.0, 26.0, 36.0] if args.seconds else []  # [s] 화면을 캡처�
 # 점검용 기록값. 순서대로 [m] H1 골반 최저 높이, [m] H1 이동 거리, H1 직전 위치, [m] AMMR 최대 지연,
 # [m] AMMR이 가장 멀리 간 x.
 h1_z_min, h1_travel, h1_last, ammr_err, ammr_x_min = math.inf, 0.0, None, 0.0, 0.0
+scan_off, scan_n = 0.0, 0  # RAPID 방식에서 KUKA가 박스와 나란히 갈 때의 [m] 최대 어긋남과 잰 프레임 수
 wall_start = time.time()  # [s] 실제 시계의 시작 시각. 시뮬레이션이 실시간의 몇 배로 도는지 계산하는 데 쓴다
 
 
@@ -631,9 +848,10 @@ def frame():
     # 집힌 박스가 그 위치를 따라가는 데 쓰인다.
     link_pos, link_rot = link_pose(kawasaki)
     if args.motion == "rapid":  # RAPID 방식은 tooldata로 정한 TCP 위치를 넘긴다
-        boxes.set_world_poses(positions=box_positions_rapid(state["t"], link_pos + link_rot.apply(tGripper["pos"])))
+        state["boxes"] = box_positions_rapid(state["t"], link_pos + link_rot.apply(tGripper["pos"]))
     else:  # 시간표 방식은 그리퍼 링크 위치를 넘긴다
-        boxes.set_world_poses(positions=box_positions(state["t"], link_pos))
+        state["boxes"] = box_positions(state["t"], link_pos)
+    boxes.set_world_poses(positions=state["boxes"])
     return state["t"]
 
 
@@ -651,8 +869,17 @@ while simulation_app.is_running() and not state["error"]:
     h1_travel += 0.0 if h1_last is None else float(np.linalg.norm(h1_pos[:2] - h1_last))  # 바닥 위 이동 거리 누적
     h1_last = h1_pos[:2].copy()
     ammr_q = ammr.get_dof_positions().numpy()[0]  # AMMR 관절 12개의 현재 값. 0번이 [m] 베이스 x다
-    ammr_err = max(ammr_err, abs(ammr_q[0] - path(AMMR_KEYS, t)[0]))  # 베이스 x가 목표에서 가장 멀어진 거리
+    ammr_err = max(ammr_err, abs(ammr_q[0] - state["ammr_x"]))  # 베이스 x가 방금 보낸 목표에서 가장 멀어진 거리
     ammr_x_min = min(ammr_x_min, ammr_q[0])
+    if args.motion == "rapid":
+        # KUKA가 박스 위를 나란히 가는 구간에서, TCP와 가장 가까운 벨트 위 박스의 x 차이를 잰다.
+        scan_pos, scan_rot = link_pose(kuka)
+        scan_tcp = scan_pos + scan_rot.apply(tScanner["pos"])
+        low_enough = scan_tcp[2] < pScanStart["pos"][2] + 0.02
+        if low_enough and pScanStart["pos"][0] + 0.05 < scan_tcp[0] < pScanEnd["pos"][0] - 0.05:
+            on_belt = [b for b in state["boxes"] if abs(b[1]) < 0.01 and abs(b[2] - (BELT_Z + BOX / 2)) < 0.01]
+            scan_off = max(scan_off, min(abs(b[0] - scan_tcp[0]) for b in on_belt))
+            scan_n += 1
     if shots and t >= shots[0]:  # 정해 둔 시각이 되면 화면을 PNG 파일로 저장한다
         os.makedirs(out_dir, exist_ok=True)
         capture_viewport_to_file(get_active_viewport(), os.path.join(out_dir, f"shot_{int(shots.pop(0)):02d}s.png"))
@@ -688,8 +915,19 @@ elif args.seconds:
         checks += [
             ("RAPID program kept up with the takt", len(offs) >= expected, f"placed {len(offs)} boxes, expected {expected}"),
             ("RAPID program placed boxes on slots (< 0.01 m)", bool(offs) and max(offs) < 0.01, f"max offset {max(offs, default=math.inf):.4f} m"),
+            ("KUKA stays over the box while scanning (< 0.03 m)", scan_n > 0 and scan_off < 0.03, f"max x offset {scan_off:.4f} m over {scan_n} frames"),
         ]
     realtime = elapsed / (time.time() - wall_start)  # 1이면 실시간, 0.7이면 실제 1초에 시뮬레이션 0.7초
+    # --- 클릭 티칭 점검. 팔레트를 선택했을 때 그 윗면 가운데가 찍히는지 본다. GUI에서 클릭하는 것과 같은 이벤트다.
+    selection = omni.usd.get_context().get_selection()
+    selection.set_selected_prim_paths(["/World/PalletOut"], True)
+    for _ in range(3):
+        frame()
+    selection.set_selected_prim_paths([], True)
+    taught = state["taught"]
+    taught_ok = taught is not None and taught[0] == "/World/PalletOut"
+    taught_off = float(np.linalg.norm(taught[1] - [PALLET_OUT[0], PALLET_OUT[1], PALLET_TOP])) if taught_ok else math.inf
+    checks.append(("Click-to-teach reports the top centre of the selected object", taught_off < 0.01, f"offset {taught_off:.4f} m"))
     # --- 정지 후 재생 점검. GUI에서 정지(■)했다가 재생(▶)하는 것을 코드로 똑같이 해 본다.
     #     다시 재생한 뒤 10초 동안 H1 높이와 두 팔의 손끝 오차를 본다.
     seen = len(kuka["errors"]), len(kawasaki["errors"])  # 여기까지 쌓인 기록 개수. 재생 뒤 기록만 골라내는 데 쓴다
