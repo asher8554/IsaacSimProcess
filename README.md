@@ -26,6 +26,35 @@ C:\isaacsim-6.2\python.bat factory_line_demo.py
 
 **첫 실행은 오래 걸린다.** 창고·로봇 에셋 약 1 GB를 인터넷에서 받는다. 이 PC에서 약 12분 걸렸다. 그 뒤로는 캐시를 써서 약 30초 만에 뜬다.
 
+## Kawasaki 적재를 적는 두 가지 방식
+
+같은 집기·놓기 동작을 두 방식으로 적어 두었다. `--motion`으로 고른다.
+
+```bash
+C:\isaacsim-6.2\python.bat factory_line_demo.py --motion rapid
+```
+
+| | 시간표 방식 (기본) | RAPID 방식 (`--motion rapid`) |
+| --- | --- | --- |
+| 코드 | `palletize_target` | `palletize_program` + `rapid_style.py` |
+| 적는 것 | 몇 초에 손끝이 어디 있는가 | 어디로(robtarget), 속도(v1000), zone(z50·fine), tool(tooldata) |
+| 걸리는 시간 | 시간표에 적은 그대로 | 거리와 속도로 정해진다 |
+| 박스와 맞추는 법 | 박스와 같은 시계를 쓴다 | `WaitUntil(box_at_pick)`으로 박스를 기다린다 |
+| 박스를 쥐고 놓는 때 | 정해진 시각 | `SetDO("doGrip", 1)`과 `SetDO("doGrip", 0)` |
+| 맞추는 방향 | 공구 축이 아래를 보게만 | (rx, ry, rz) 전체 |
+
+RAPID 방식은 ABB와 단위가 다르다. 길이는 m, 속도는 m/s다. `v1000`은 1.0 m/s, `z50`은 0.05 m다.
+방향은 오일러 각 (rx, ry, rz) [deg]로 적고 `rx = 180`이 공구가 바닥을 보는 자세다 (ABB 쿼터니언 [0, 1, 0, 0]).
+`MoveJ`, `wobj`는 없다. zone은 포물선으로 깎지 않고 반경 안에 들어오면 다음 목표로 방향을 튼다.
+
+`rapid_style.py`는 Isaac Sim 없이 따로 시험할 수 있다.
+
+```bash
+C:\isaacsim-6.2\python.bat rapid_style.py
+```
+
+KUKA는 시간표 방식만 있다. 컨베이어 트래킹이 아니다. 박스 위치를 읽지 않고 같은 시계로 시각만 맞춘다.
+
 ## 자체 점검
 
 ```bash
@@ -39,14 +68,15 @@ C:\isaacsim-6.2\python.bat factory_line_demo.py --headless --seconds 40
 - H1 골반 높이 0.8 m 초과(넘어지지 않음), 평균 0.25 m/s 넘게 보행
 - 정지 후 다시 재생한 뒤 10초 동안 H1이 서 있고 두 팔이 목표를 따라감
 
-`--headless`를 빼면 같은 점검을 GUI 창에서 한다.
+`--headless`를 빼면 같은 점검을 GUI 창에서 한다. `--motion rapid`를 붙이면 RAPID 방식으로 점검하고, 박스를 제때 집어 팔레트 칸 중심 0.01 m 이내에 놓았는지도 본다.
 
 ## 바꿔 보기
 
 모두 `factory_line_demo.py` 위쪽 상수다.
 
 - `TAKT`, `BELT_V` — 라인 속도. `X_OUT - X_IN = 3 * TAKT * BELT_V`를 유지해야 박스가 집히는 순간과 맞는다.
-- `scan_target`, `palletize_target` — 두 산업용 로봇의 손끝 경로.
+- `scan_target`, `palletize_target` — 두 산업용 로봇의 손끝 경로 (시간표 방식).
+- `pPick`, `pPallet`, `tGripper`, `palletize_program` — Kawasaki의 목표 좌표·공구·프로그램 (RAPID 방식).
 - `AMMR_KEYS` — AMMR 베이스 위치·방향과 팔 자세 키프레임.
 - `H1_WAYPOINTS` — 휴머노이드 순찰 지점.
 

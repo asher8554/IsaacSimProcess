@@ -7,6 +7,10 @@ r"""실행: C:\isaacsim-6.2\python.bat factory_line_demo.py [--headless] [--seco
 - AMMR (Ridgeback + Franka)        팔레트와 출하 버퍼 사이를 왕복하며 팔을 뻗는 동작
 
 ROS 2는 쓰지 않는다. 박스는 물리 없는 시각용 큐브이고 그리퍼 위치를 따라다닐 뿐이다.
+
+Kawasaki의 적재 동작은 두 가지 방식으로 적혀 있고 --motion으로 고른다.
+- --motion time  (기본)  "몇 초에 어디"를 적은 시간표 방식. palletize_target 참고.
+- --motion rapid         ABB RAPID처럼 "좌표·속도·zone·tool"로 적은 방식. palletize_program 참고.
 """
 
 import argparse
@@ -17,6 +21,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--headless", action="store_true", help="창 없이 실행")
 parser.add_argument(
     "--seconds", type=float, default=0.0, help="이 시간(시뮬레이션 초)만 돌리고 자체 점검 후 종료. 0이면 창을 닫을 때까지 실행"
+)
+parser.add_argument(
+    "--motion",
+    choices=["time", "rapid"],
+    default="time",
+    help="Kawasaki 적재 동작을 적는 방식. time은 시간표(palletize_target), rapid는 ABB RAPID 방식(palletize_program)",
 )
 args, _ = parser.parse_known_args()
 simulation_app = SimulationApp({"headless": args.headless})
@@ -38,6 +48,8 @@ from isaacsim.core.simulation_manager.impl.isaac_events import IsaacEvents
 from isaacsim.robot.policy.examples import RobotPolicyRunner, get_h1_spec
 from isaacsim.storage.native import get_assets_root_path
 from omni.kit.viewport.utility import capture_viewport_to_file, get_active_viewport
+from rapid_style import MoveL, Offs, RapidTask, SetDO, WaitTime, WaitUntil, fine, robtarget, tooldata, v1000, v1500, z50
+from scipy.spatial.transform import Rotation
 
 # ------------------------------------------------------------------ 라인 배치
 # 주석 맨 앞 대괄호가 그 값의 단위다. [m] 미터, [s] 초, [m/s] 초당 미터, [rad] 라디안(180도 = 3.1416 rad).
@@ -100,6 +112,10 @@ def scan_target(t):
     택트(8초)마다 같은 동작을 되풀이한다. 벨트 위를 지나가는 박스 바로 위로 내려가 박스와 같은 속도로
     함께 이동하고(검사하는 동작), 다시 올라와 다음 박스가 올 자리로 돌아간다.
     이 함수는 "지금 손끝이 어디 있어야 하는가"만 정한다. 로봇을 그 좌표로 보내는 일은 ik_step이 한다.
+
+    이것은 컨베이어 동기화(컨베이어 트래킹)가 아니다. 로봇은 박스나 벨트의 위치를 읽지 않는다. 박스 위치와
+    손끝 목표가 둘 다 같은 시계 t로 계산되고, 박스가 지나가는 시각에 맞춰 시간표를 짜 두었을 뿐이다.
+    BELT_V를 바꾸면 아래 시간표도 같이 고쳐야 맞는다.
 
     손끝이 거쳐 가는 네 지점과 순서 (옆에서 본 그림. 박스는 왼쪽에서 오른쪽으로 흐른다).
 
@@ -205,6 +221,141 @@ def box_positions(t, gripper_pos):
     return out
 
 
+# ------------------------------------------------------------------ RAPID 방식 (--motion rapid)
+# 위 palletize_target은 "몇 초에 어디"를 적은 시간표다. 같은 적재 동작을 ABB RAPID처럼
+# "어디로(robtarget), 얼마나 빨리(speed), 어떻게 지나서(zone), 무엇으로(tool)"라고 적은 것이 아래다.
+# 명령의 뜻과 ABB와 다른 점은 rapid_style.py 맨 위에 적혀 있다.
+
+io = {"doGrip": 0}  # 출력 신호. doGrip이 1이면 그리퍼가 쥔 상태다
+cell = {"held": None, "placed": {}, "log": []}  # held는 쥐고 있는 박스 번호, placed는 {박스 번호: 놓인 [m] 좌표}
+
+# tooldata. Kawasaki 손끝 링크(gripper_center)에서 본 TCP의 [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다.
+# 링크의 +Z(공구가 뻗는 방향)로 GAP만큼 나간 점을 TCP로 잡았다. 그래서 목표 좌표에 "박스 윗면"을 그대로 적는다.
+tGripper = tooldata(0.0, 0.0, GAP, 0.0, 0.0, 0.0)
+# robtarget. [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. rx = 180은 공구가 바닥을 보는 자세다.
+pPick = robtarget(X_OUT, 0.0, BELT_Z + BOX, 180.0, 0.0, 0.0)  # 벨트 끝에 온 박스의 윗면
+pPallet = robtarget(PALLET_OUT[0], PALLET_OUT[1], PALLET_TOP + BOX, 180.0, 0.0, 0.0)  # 팔레트 가운데 칸 박스의 윗면
+
+
+def waiting_box(t):
+    """벨트 끝에 도착해 집히기를 기다리는 박스의 번호를 돌려준다. 없으면 None이다."""
+    for b in range(6):
+        u = (t - b * TAKT) % (6 * TAKT)  # [s] 이 박스가 벨트 끝에 도착한 뒤 흐른 시간
+        arrived_in_this_run = t - u > -1e-6  # 시작 전에 이미 팔레트에 있던 박스는 제외한다
+        if u < 3 * TAKT and arrived_in_this_run and b != cell["held"] and b not in cell["placed"]:
+            return b
+    return None
+
+
+def box_at_pick():
+    """벨트 끝에 박스가 와 있으면 True. RAPID의 디지털 입력 diBoxAtPick에 해당한다."""
+    return waiting_box(state["t"]) is not None
+
+
+def palletize_program():
+    """Kawasaki 적재 프로그램. 같은 내용을 RAPID로 쓰면 아래와 같다 (단위만 mm에서 m로 다르다).
+
+        PROC Palletize()
+          WHILE TRUE DO
+            pPlace := Offs(pPallet, slotX{nSlot}, 0, 0);
+            MoveL Offs(pPick, 0, 0, 450), v1500, z50, tGripper;
+            MoveL pPick, v1000, fine, tGripper;
+            WaitUntil diBoxAtPick = 1;
+            SetDO doGrip, 1;
+            WaitTime 0.3;
+            MoveL Offs(pPick, 0, 0, 450), v1000, z50, tGripper;
+            MoveL Offs(pPlace, 0, 0, 600), v1500, z50, tGripper;
+            MoveL pPlace, v1000, fine, tGripper;
+            SetDO doGrip, 0;
+            WaitTime 0.3;
+            MoveL Offs(pPlace, 0, 0, 600), v1000, z50, tGripper;
+            nSlot := (nSlot + 1) MOD 3;
+          ENDWHILE
+        ENDPROC
+
+    yield 한 줄이 RAPID 명령 한 줄이다. 시간표 방식과 달리 "몇 초에"가 없다. 걸리는 시간은 거리와 속도로 정해지고,
+    박스가 오는 시각과는 WaitUntil로 맞춘다.
+    """
+    slot = 0  # 이번에 놓을 팔레트 칸 번호 (0, 1, 2)
+    while True:
+        pPlace = Offs(pPallet, SLOT_X[slot], 0.0, 0.0)  # 가운데 칸에서 x로 옮긴 이번 칸
+        yield MoveL(Offs(pPick, 0.0, 0.0, 0.45), v1500, z50, tGripper)  # 집는 점 45 cm 위로 간다 (멈추지 않고 지나감)
+        yield MoveL(pPick, v1000, fine, tGripper)  # 집는 점으로 내려가 정확히 선다
+        yield WaitUntil(box_at_pick)  # 박스가 벨트 끝에 올 때까지 기다린다
+        yield SetDO("doGrip", 1)  # 쥔다
+        yield WaitTime(0.3)  # 쥐는 시간
+        yield MoveL(Offs(pPick, 0.0, 0.0, 0.45), v1000, z50, tGripper)  # 들어 올린다
+        yield MoveL(Offs(pPlace, 0.0, 0.0, 0.60), v1500, z50, tGripper)  # 놓을 칸 60 cm 위로 옮긴다
+        yield MoveL(pPlace, v1000, fine, tGripper)  # 놓을 칸으로 내려가 정확히 선다
+        yield SetDO("doGrip", 0)  # 놓는다
+        yield WaitTime(0.3)  # 놓는 시간
+        yield MoveL(Offs(pPlace, 0.0, 0.0, 0.60), v1000, z50, tGripper)  # 빈손으로 올린다
+        slot = (slot + 1) % 3  # 다음 칸
+
+
+def box_positions_rapid(t, tcp_pos):
+    """RAPID 방식일 때 박스 6개의 위치. tcp_pos는 [m] 지금 실제 TCP 위치다.
+
+    벨트 위를 흐르는 것은 시간표 방식과 같다. 집히고 놓이는 것만 시각이 아니라 doGrip 신호를 따른다.
+    """
+    out = box_positions(t, tcp_pos)  # 벨트 위 박스와, 시작할 때 이미 팔레트에 있던 박스는 이 값을 그대로 쓴다
+    under_tcp = tcp_pos - [0.0, 0.0, BOX / 2]  # [m] TCP가 박스 윗면에 있을 때의 박스 중심
+    if io["doGrip"] and cell["held"] is None:  # 쥐는 신호가 켜졌다. 벨트 끝에서 기다리던 박스를 잡는다
+        cell["held"] = waiting_box(t)
+    elif not io["doGrip"] and cell["held"] is not None:  # 신호가 꺼졌다. 박스를 지금 자리에 내려놓는다
+        cell["placed"][cell["held"]] = under_tcp
+        cell["log"].append(under_tcp)
+        cell["held"] = None
+    for b in range(6):
+        u = (t - b * TAKT) % (6 * TAKT)
+        if u >= 3 * TAKT:  # 벨트로 돌아간 박스는 놓였던 자리를 잊는다
+            cell["placed"].pop(b, None)
+        elif b in cell["placed"]:  # 놓인 자리에 그대로 있다
+            out[b] = cell["placed"][b]
+        elif b == cell["held"]:  # TCP에 붙어 따라간다
+            out[b] = under_tcp
+        elif t - u > -1e-6:  # 벨트 끝에 도착해 집히기를 기다린다
+            out[b] = [X_OUT, 0.0, BELT_Z + BOX / 2]
+    return out
+
+
+def joint_step(arm, jac, error):
+    """손끝 오차를 줄이는 관절 증분을 구해 위치 목표로 보낸다 (감쇠 최소제곱). 두 IK 함수가 같이 쓴다.
+
+    jac은 6x6 자코비안, error는 [m] 위치 오차 3개와 [rad] 방향 오차 3개다.
+    """
+    dq = jac.T @ np.linalg.solve(jac @ jac.T + 0.01 * np.eye(6), error)
+    q = arm["robot"].get_dof_positions().numpy()[0, :6]
+    # 관절 지령을 스텝당 0.01 rad (= 2 rad/s) 이내로 적분한다. 실제 관절보다 0.1 rad 넘게 앞서가지 않게 묶는다.
+    arm["q_cmd"] = np.clip(arm["q_cmd"] + np.clip(0.3 * dq, -0.01, 0.01), q - 0.1, q + 0.1)
+    arm["robot"].set_dof_position_targets(arm["q_cmd"], dof_indices=list(range(6)))
+
+
+def link_pose(arm):
+    """손끝 링크의 지금 실제 자세를 ([m] 위치, 방향)으로 돌려준다."""
+    pos, quat = arm["ee"].get_world_poses()
+    w, x, y, z = quat.numpy()[0]
+    return pos.numpy()[0], Rotation.from_quat([x, y, z, w])  # Isaac Sim은 (w, x, y, z), scipy는 (x, y, z, w) 순서다
+
+
+def ik_step_pose(arm, tool, target_pos, target_rot, t):
+    """TCP를 목표 위치와 방향으로 보내는 미분 IK 한 스텝. RAPID 방식 명령이 쓴다.
+
+    ik_step과 다른 점은 두 가지다. 손끝 링크가 아니라 tooldata로 정한 TCP를 맞추고,
+    공구 축 방향만이 아니라 방향 전체 (rx, ry, rz)를 맞춘다.
+    """
+    link_pos, link_rot = link_pose(arm)
+    reach = link_rot.apply(tool["pos"])  # [m] 손끝 링크 원점에서 TCP까지의 벡터 (월드 기준)
+    tcp_pos, tcp_rot = link_pos + reach, link_rot * tool["rot"]
+    error = np.concatenate([target_pos - tcp_pos, (target_rot * tcp_rot.inv()).as_rotvec()])
+    jac = arm["robot"].get_jacobian_matrices().numpy()[0, arm["row"], :, :6].copy()
+    jac[:3] -= np.cross(reach, jac[3:].T).T  # 링크 원점의 속도를 TCP의 속도로 바꾼다 (v_tcp = v + w x reach)
+    joint_step(arm, jac, error)
+    if t > 3.0:  # 자체 점검용 기록 (초기 수렴 구간 제외)
+        arm["errors"].append(np.linalg.norm(target_pos - tcp_pos))
+        arm["aligns"].append(float(tcp_rot.apply([0.0, 0.0, 1.0]) @ DOWN))
+
+
 def ik_step(arm, target, t):
     """손끝을 target으로 보내고 공구 축을 아래로 맞추는 감쇠 최소제곱 미분 IK 한 스텝."""
     pos, quat = arm["ee"].get_world_poses()
@@ -219,11 +370,7 @@ def ik_step(arm, target, t):
     axis = rot @ arm["tool_axis"]
     error = np.concatenate([target - pos, np.cross(axis, DOWN)])
     jac = arm["robot"].get_jacobian_matrices().numpy()[0, arm["row"], :, :6]
-    dq = jac.T @ np.linalg.solve(jac @ jac.T + 0.01 * np.eye(6), error)
-    q = arm["robot"].get_dof_positions().numpy()[0, :6]
-    # 관절 지령을 스텝당 0.01 rad (= 2 rad/s) 이내로 적분한다. 실제 관절보다 0.1 rad 넘게 앞서가지 않게 묶는다.
-    arm["q_cmd"] = np.clip(arm["q_cmd"] + np.clip(0.3 * dq, -0.01, 0.01), q - 0.1, q + 0.1)
-    arm["robot"].set_dof_position_targets(arm["q_cmd"], dof_indices=list(range(6)))
+    joint_step(arm, jac, error)
     if t > 3.0:  # 자체 점검용 기록 (초기 수렴 구간 제외)
         arm["errors"].append(np.linalg.norm(target - pos))
         arm["aligns"].append(float(axis @ DOWN))
@@ -395,7 +542,8 @@ ViewportManager.set_camera_view("/OmniverseKit_Persp", eye=[8.5, -8.0, 6.0], tar
 # ------------------------------------------------------------------ 실행
 # 실행 중에 바뀌는 값들. t는 [s] 시뮬레이션 시각, first는 "재생 후 첫 스텝인가", waypoint는 H1이 향하는
 # 순찰 지점 번호, error는 물리 콜백에서 난 오류 내용이다.
-state = {"t": START_T, "first": True, "waypoint": 0, "error": None}
+# task는 RAPID 방식일 때 Kawasaki 프로그램을 실행하는 RapidTask다.
+state = {"t": START_T, "first": True, "waypoint": 0, "error": None, "task": None}
 
 
 def on_physics_step(dt, context):
@@ -418,6 +566,10 @@ def on_physics_step(dt, context):
             kuka["robot"].set_dof_gains(5.73e8, 5.73e6)
             for arm in (kuka, kawasaki):
                 arm["q_cmd"] = arm["home"].copy()  # IK가 적분해 가는 지령 관절각도 시작 자세로 되돌린다
+            # RAPID 방식의 프로그램·신호·박스 상태도 처음으로 되돌린다. 프로그램은 첫 줄부터 다시 시작한다.
+            state["task"] = RapidTask(palletize_program(), io)
+            io["doGrip"] = 0
+            cell.update(held=None, placed={})
             for robot in (kuka["robot"], kawasaki["robot"], ammr):
                 robot.reset_to_default_state()  # set_default_state로 정해 둔 자세로 한 번에 옮긴다
             # H1을 기본 자세로 세우고 보행 정책을 초기화한다. 인자는 속도 명령 [전진, 횡, 회전]이고 처음에는 0이다.
@@ -427,7 +579,13 @@ def on_physics_step(dt, context):
         state["t"] += dt
         t = state["t"]
         ik_step(kuka, scan_target(t), t)  # KUKA 손끝을 "지나가는 박스 위" 좌표로 보낸다
-        ik_step(kawasaki, palletize_target(t), t)  # Kawasaki 손끝을 "집기 → 놓기" 경로 위의 좌표로 보낸다
+        if args.motion == "rapid":
+            # RAPID 방식. 프로그램을 dt만큼 진행시켜 "지금 TCP가 있어야 할 자세"를 받고, 그 자세로 TCP를 보낸다.
+            tcp_pos, tcp_rot, tool = state["task"].step(dt, *link_pose(kawasaki))
+            ik_step_pose(kawasaki, tool, tcp_pos, tcp_rot, t)
+        else:
+            # 시간표 방식. Kawasaki 손끝을 "집기 → 놓기" 경로 위의 좌표로 보낸다.
+            ik_step(kawasaki, palletize_target(t), t)
         # AMMR 관절 10개(베이스 3 + 팔 7)에 이 시각의 키프레임 값을 목표로 보낸다. 손가락 2개는 건드리지 않는다.
         ammr.set_dof_position_targets(path(AMMR_KEYS, t), dof_indices=list(range(10)))
         h1.step(dt, walk_command())  # H1 정책에 속도 명령을 넘긴다. 관절 19개의 목표는 정책이 계산한다
@@ -469,9 +627,13 @@ def frame():
         return None
     if state["first"]:  # 재생은 했지만 첫 스텝 초기화가 아직 안 끝났다
         return None
-    # 박스 6개를 이 시각의 위치로 옮긴다. 두 번째 인자는 [m] Kawasaki 그리퍼 링크의 현재 위치이고,
+    # 박스 6개를 이 시각의 위치로 옮긴다. 두 번째 인자는 [m] Kawasaki 그리퍼의 현재 위치이고,
     # 집힌 박스가 그 위치를 따라가는 데 쓰인다.
-    boxes.set_world_poses(positions=box_positions(state["t"], kawasaki["ee"].get_world_poses()[0].numpy()[0]))
+    link_pos, link_rot = link_pose(kawasaki)
+    if args.motion == "rapid":  # RAPID 방식은 tooldata로 정한 TCP 위치를 넘긴다
+        boxes.set_world_poses(positions=box_positions_rapid(state["t"], link_pos + link_rot.apply(tGripper["pos"])))
+    else:  # 시간표 방식은 그리퍼 링크 위치를 넘긴다
+        boxes.set_world_poses(positions=box_positions(state["t"], link_pos))
     return state["t"]
 
 
@@ -518,6 +680,15 @@ elif args.seconds:
         ("H1 stays upright (pelvis > 0.8 m)", h1_z_min > 0.8, f"min z {h1_z_min:.3f} m"),
         ("H1 keeps walking (> 0.25 m/s)", h1_travel / elapsed > 0.25, f"{h1_travel:.1f} m in {elapsed:.0f} s"),
     ]
+    if args.motion == "rapid":
+        # RAPID 방식 전용 항목. 프로그램이 박스를 제때 집어 팔레트 칸에 정확히 놓았는지 본다.
+        slots = [np.array([PALLET_OUT[0] + dx, PALLET_OUT[1], PALLET_TOP + BOX / 2]) for dx in SLOT_X]
+        offs = [min(float(np.linalg.norm(placed - slot)) for slot in slots) for placed in cell["log"]]  # [m] 칸 중심과의 거리
+        expected = int(max(state["t"] - 5.0, 0.0) // TAKT) + 1  # 박스는 TAKT마다 오고, 집은 뒤 5초 안에 놓여야 한다
+        checks += [
+            ("RAPID program kept up with the takt", len(offs) >= expected, f"placed {len(offs)} boxes, expected {expected}"),
+            ("RAPID program placed boxes on slots (< 0.01 m)", bool(offs) and max(offs) < 0.01, f"max offset {max(offs, default=math.inf):.4f} m"),
+        ]
     realtime = elapsed / (time.time() - wall_start)  # 1이면 실시간, 0.7이면 실제 1초에 시뮬레이션 0.7초
     # --- 정지 후 재생 점검. GUI에서 정지(■)했다가 재생(▶)하는 것을 코드로 똑같이 해 본다.
     #     다시 재생한 뒤 10초 동안 H1 높이와 두 팔의 손끝 오차를 본다.
