@@ -268,16 +268,27 @@ shots = [6.0, 16.0, 26.0, 36.0] if args.seconds else []
 h1_z_min, h1_travel, h1_last, ammr_err, ammr_x_min = math.inf, 0.0, None, 0.0, 0.0
 wall_start = time.time()
 
-while simulation_app.is_running() and not state["error"]:
+
+
+def frame():
+    """한 프레임을 돌린다. 시뮬레이션이 진행 중이면 현재 시각을, 아니면 None을 돌려준다."""
     simulation_app.update()
-    if not SimulationManager.is_simulating():  # GUI에서 정지하면 다음 재생 때 처음부터 다시 시작한다
-        state["first"] = True
-        continue
+    if timeline.is_stopped():  # GUI에서 정지하면 다음 재생 때 처음부터 다시 시작한다
+        if not state["first"]:
+            # 정지하면 PhysX가 H1 관절 게인을 에셋 기본값(kp 5730)으로 되돌린다. 정책 런타임을 닫아 두면
+            # 다음 재생 때 다시 만들어지면서 학습 게인(kp 150~200)이 재적용된다. 안 닫으면 H1이 넘어진다.
+            h1.close()
+            state["first"] = True
+        return None
     if state["first"]:
-        continue
-    t = state["t"]
-    boxes.set_world_poses(positions=box_positions(t, kawasaki["ee"].get_world_poses()[0].numpy()[0]))
-    if not args.seconds:
+        return None
+    boxes.set_world_poses(positions=box_positions(state["t"], kawasaki["ee"].get_world_poses()[0].numpy()[0]))
+    return state["t"]
+
+
+while simulation_app.is_running() and not state["error"]:
+    t = frame()
+    if t is None or not args.seconds:
         continue
     # 아래는 자체 점검용 기록
     h1_pos = h1.articulation.get_world_poses()[0].numpy()[0]
@@ -308,9 +319,30 @@ elif args.seconds:
         ("H1 stays upright (pelvis > 0.8 m)", h1_z_min > 0.8, f"min z {h1_z_min:.3f} m"),
         ("H1 keeps walking (> 0.25 m/s)", h1_travel / elapsed > 0.25, f"{h1_travel:.1f} m in {elapsed:.0f} s"),
     ]
+    realtime = elapsed / (time.time() - wall_start)
+    # 정지 후 재생 점검. 다시 재생한 뒤 10초 동안 H1 높이와 두 팔의 손끝 오차를 본다.
+    seen = len(kuka["errors"]), len(kawasaki["errors"])
+    timeline.stop()
+    for _ in range(5):
+        frame()
+    timeline.play()
+    replay_z = math.inf
+    while simulation_app.is_running() and not state["error"]:
+        t = frame()
+        if t is None:
+            continue
+        replay_z = min(replay_z, h1.articulation.get_world_poses()[0].numpy()[0][2])
+        if t >= 8.0:
+            break
+    replay_err = np.mean(kuka["errors"][seen[0] :] + kawasaki["errors"][seen[1] :])
+    checks += [
+        ("Replay ran without error", state["error"] is None, state["error"] or "ok"),
+        ("H1 upright after stop and replay (pelvis > 0.8 m)", replay_z > 0.8, f"min z {replay_z:.3f} m"),
+        ("Arms track after stop and replay (< 0.03 m)", replay_err < 0.03, f"mean {replay_err:.4f}"),
+    ]
     for name, ok, detail in checks:
         print(f"CHECK {'PASS' if ok else 'FAIL'} | {name} | {detail}")
-    print(f"REALTIME {elapsed / (time.time() - wall_start):.2f}x ({elapsed:.0f} sim s)")
+    print(f"REALTIME {realtime:.2f}x ({elapsed:.0f} sim s)")
     print("SELF-CHECK", "PASS" if all(ok for _, ok, _ in checks) else "FAIL")
 
 timeline.stop()
