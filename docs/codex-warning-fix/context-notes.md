@@ -1,0 +1,22 @@
+# 작업 판단 기록
+
+- 2026-11-17. 사용자 요청은 Codex 전역 설정 경고 제거다. 현재 저장소의 기존 소스·README·루트 작업 기록에는 미커밋 변경이 있어 건드리지 않는다.
+- PATH의 codex는 0.160.1, 데스크톱 번들은 0.169.0-alpha.11.1이다. config.toml에는 trusted_hash와 함께 trusted_content_hash가 4개 존재한다.
+- 공식 skills_config.rs와 render.rs에 skills.max_context_tokens가 있고 지정 시 최대 10000이다. 스킬을 삭제·비활성화하지 않고 이 설정을 우선 검증한다.
+- strict-config는 features/debug 하위 명령에서는 지원하지 않는다. 실제 app-server 설정 로딩과 debug prompt-input 렌더링으로 검증한다.
+- 전역 설정 편집은 사용자의 경고 제거 요청에 포함된다. 클라이언트별 스킬 예산은 Codex 전용이며 Claude에 같은 키를 넣지 않는다. 스킬·훅 원본과 MCP 등록은 수정하지 않는다.
+- 추가 확인. 공식 HookStateToml 스키마에서 trusted_content_hash는 승인된 플러그인 콘텐츠를 뜻한다. 실제 app-server 초기화 시 0.160.1만 4개 무시 경고를 냈고 데스크톱 0.169.0-alpha.11.1은 정상 로딩했다. 해시 삭제 대신 공식 안정판 0.169.0으로 독립 CLI를 업데이트한다. npm 설치본 0.163.0은 PATH 뒤에 있어 현재 실행 대상이 아니며 변경하지 않는다.
+- debug prompt-input은 양쪽 모두 533개 스킬 행을 렌더링했다. skills/list의 534개는 비활성 항목도 포함한다. 시작 경고와 실제 턴의 스킬 예산 경고는 구분해서 검증해야 한다.
+- Notion https://www.notion.so/3d53d76f887481df98f0c35fd02ebb7b 본문을 읽었다. 파일 존재·활성 목록·실행 성공을 구분하고 현재 기기 파일로 확인하라는 원칙을 적용했다.
+- 공식 codex update는 설치 방식을 인식하지 못해 실패했다. openai/codex 공식 rust-v0.169.0 릴리스의 x86_64 Windows CLI·code-mode-host를 내려받고 GitHub 자산 SHA-256과 각각 대조한 뒤 기존 독립 설치 위치에 반영했다. 실행 중 세션은 종료하지 않았다.
+- CLI SHA-256. ce1945eb440b5481ed1233ebaf32b7056ee7e4e452fa62ffe1cbfb26103cdee0. code-mode-host SHA-256. a8da671dfabef13a370e0a06864586f52932b477f462afa3f0c51ae30d9207a2.
+- 백업 위치. C:\Users\asher\.codex\backups\warning-fix-20261117-074717. 기존 실행 중 바이너리도 original-codex.exe·original-codex-code-mode-host.exe로 보존했다. 두 실행 파일은 CLI 전용이므로 Claude·Orca의 스킬 원본이나 MCP 등록을 동기화할 변경은 없다. Orca에서 실행하는 기존 Codex 세션에는 재시작이 필요하다.
+- 양쪽 독립 app-server의 initialize·config/read·skills/list·thread/start가 성공했고 configWarning·warning은 0개였다. 로컬 API 목록은 534개, 일반 프롬프트 렌더는 533개다. review-agent는 API에만 있었고 computer-use junction은 canonical path로 비교해야 한다. 처음의 단순 경로 비교 실패를 이 차이로 설명했다.
+- 실제 codex exec --strict-config --ephemeral 검사와 --no-daemon을 붙인 독립 검사 모두 OK 응답·종료 코드 0이었다. 그러나 두 검사 모두 스킬 55개 누락 경고가 있었다. debug prompt-input은 런타임 전체 목록을 검증하지 못하므로 그 결과만으로 용량 문제 해결을 주장하면 안 된다.
+- 현재 SQLite 로그를 읽어 실제 세션 total_skills=625·included_skills=565·omitted_skills=60·budget_limit=10000을 확인했다. 모델 카탈로그 gpt-6.1-sol context_window=500000이므로 기본 2%도 이미 10000이다. max_context_tokens=10000 추가는 효과가 없어 제거했고 config.toml을 백업과 바이트 단위로 동일하게 복원했다.
+- 스킬 원문·활성 상태·플러그인 원본은 변경하지 않았다. 기능을 유지하면서 공식 설정 상한을 넘기는 방법은 확인되지 않았다. 임의의 스킬을 비활성화하지 않고 활성 범위에 관한 사용자 선택을 요청했다. 작업은 스킬 용량 경고까지 해결된 상태가 아니다.
+- 실제 응답 시험의 부수 로그에 기존 Khala PAT 인증 오류가 나타났다. 이번 두 경고와 무관해 인증·MCP는 수정하지 않았다.
+- 사용자가 "ECC에서 사용할 분야를 선별하고 나머지는 비활성화"를 선택했다. Python·JS/TS·Windows·로봇·일반 조사·문서 작업을 우선 유지하고 ECC의 전문 업종·의료·물류·광고·블록체인 및 Quarkus·Laravel·Perl 등 64개를 Codex skills.config의 이름 선택자로 비활성화했다. 개별 사용 빈도를 실측했다는 뜻은 아니다.
+- 양쪽 app-server skills/list에서 정확히 같은 64개만 비활성화되고 470개가 활성화됨을 확인했다. 모든 제외 스킬 파일이 존재한다. config.toml은 기존 값 전부를 보존하고 이 skills.config 배열만 추가한 상태다. Codex 전용 목록 예산을 위한 선택이므로 Claude의 스킬 파일·활성 상태는 바꾸지 않았다.
+- 최종 CLI 실사용 검사. codex --no-daemon exec --strict-config --ephemeral --json으로 실제 OK 응답·종료 코드 0·오류/경고 이벤트 0개를 확인했다. 이제 두 경고 모두 새 CLI 세션에서 해결됐다. 실행 중인 기존 UI 세션은 종료하지 않았으며 다시 시작해야 한다.
+- 현재 설정과 설치 바이너리 해시를 최종 대조했다. 제외 목록과 활성화 복구 방법은 disabled-skills.md에 있다. 스킬을 추가로 설치하면 지원 예산을 다시 초과할 수 있다.
