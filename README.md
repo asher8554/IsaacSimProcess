@@ -12,9 +12,10 @@ Isaac Sim 6.2에서 산업용 로봇 2대, 휴머노이드 1대, AMMR 1대가 �
 | 산업용 로봇 A | KUKA KR210 L150 | 컨베이어 위 박스를 벨트 속도로 따라가며 검사 | 미분 IK |
 | 산업용 로봇 B | Kawasaki RS080N + RG2 | 벨트 끝에서 박스를 들어 팔레트 3칸에 차례로 적재 | 미분 IK |
 | 휴머노이드 | Unitree H1 | 라인 옆 통로를 사각형으로 순찰 보행 | Isaac Sim 내장 보행 정책 |
-| AMMR | Clearpath Ridgeback + Franka | 적재 팔레트와 출하 버퍼 사이를 왕복하고 팔을 뻗음 | 관절 키프레임 |
+| AMMR | Clearpath Ridgeback + Franka | 적재 팔레트와 출하 버퍼 사이를 왕복하고 팔을 뻗음 | RAPID 스타일 베이스·관절 목표 |
 
-택트 타임은 8초다. 박스는 0.225 m/s로 흐르고 8초마다 1개씩 적재된다. AMMR 왕복 주기는 40초다.
+택트 타임은 8초다. 박스는 0.225 m/s로 흐르고 8초마다 1개씩 적재된다.
+AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다. 이전 시간표 방식의 왕복 주기는 40초다.
 
 ## 실행
 
@@ -22,20 +23,22 @@ Isaac Sim 6.2에서 산업용 로봇 2대, 휴머노이드 1대, AMMR 1대가 �
 C:\isaacsim-6.2\python.bat factory_line_demo.py
 ```
 
+이 명령 하나가 Isaac Sim을 시작하고 네 로봇의 RAPID 스타일 프로그램을 실행한다. Isaac Sim을 따로 실행할 필요가 없다.
+터미널에 `[MOTION] rapid | RAPID programs -> robot drives`가 출력된다.
 창이 뜨고 바로 재생된다. 창을 닫으면 끝난다. 정지(■) 후 다시 재생하면 처음부터 시작한다. 일시정지 후 재생하면 멈춘 곳에서 이어진다.
 
 **첫 실행은 오래 걸린다.** 창고·로봇 에셋 약 1 GB를 인터넷에서 받는다. 이 PC에서 약 12분 걸렸다. 그 뒤로는 캐시를 써서 약 30초 만에 뜬다.
 
 ## 동작을 적는 두 가지 방식
 
-네 로봇의 동작을 두 방식으로 적어 두었다. `--motion`으로 고른다. 장면과 박스는 같다.
+네 로봇의 동작을 두 방식으로 적어 두었다. **기본값은 RAPID 방식**이고 `--motion`으로 고른다. 장면과 박스는 같다.
 아래 비교표는 Kawasaki 적재를 예로 들었다.
 
 ```bash
 C:\isaacsim-6.2\python.bat factory_line_demo.py --motion rapid
 ```
 
-| | 시간표 방식 (기본) | RAPID 방식 (`--motion rapid`) |
+| | 시간표 방식 (`--motion time`) | RAPID 방식 (기본, `--motion rapid`) |
 | --- | --- | --- |
 | 코드 | `palletize_target` | `palletize_program` + `rapid_style.py` |
 | 적는 것 | 몇 초에 손끝이 어디 있는가 | 어디로(robtarget), 속도(v1000), zone(z50·fine), tool(tooldata) |
@@ -53,6 +56,30 @@ RAPID 방식은 ABB와 단위가 다르다. 길이는 m, 속도는 m/s다. `v100
 ```bash
 C:\isaacsim-6.2\python.bat rapid_style.py
 ```
+
+위 명령은 실행기의 수치 시험이다. 로봇 장면을 실행하려면 `factory_line_demo.py`를 실행한다.
+기존 시간표 실행이 필요하면 `C:\isaacsim-6.2\python.bat factory_line_demo.py --motion time`을 사용한다.
+
+## RAPID 명령이 실제 로봇을 움직이는 과정
+
+동작을 수정할 곳은 `factory_line_demo.py`의 `scan_program`, `palletize_program`, `ammr_program`, `patrol_program`이다.
+목표·공구는 같은 파일의 `RAPID 방식의 목표·공구 등록` 구역에서 정한다.
+예를 들어 `yield MoveL(pPick, v1000, fine, tGripper)`는 아래 순서로 실제 실행된다.
+
+1. `palletize_program()`이 이동 명령을 내놓는다. 명령이 진행되는 동안 프로그램은 그 줄에서 기다린다.
+2. Isaac Sim이 물리 0.005초마다 `on_physics_step()`을 호출한다.
+3. `RapidTask.step()`이 실제 손끝 자세를 읽어 이번 스텝의 지령 TCP 위치·방향을 계산한다.
+4. `ik_step_pose()`가 TCP 오차를 구하고 `joint_step()`이 이를 관절 목표로 바꾼다.
+5. `set_dof_position_targets()`가 Isaac Sim 관절 구동기에 목표를 전달한다. 로봇은 물리 스텝에 따라 그 목표를 따라간다.
+6. 다음 물리 스텝에서 실제 자세를 다시 읽는다. `fine`은 TCP 위치가 목표 5 mm 안에 들어와야 다음 명령으로 넘어간다.
+
+`RapidTask.step()`의 반환값 대신 `task.pos`, `task.rot`, `task.joints`, `task.base`, `task.goal` 속성으로 지령을 읽는다.
+AMMR의 `MoveBase`·`MoveAbsJ`는 차체 가상 관절 3개와 팔 관절 7개에 목표를 보낸다.
+H1의 `MoveBase`는 목적지를 몸체 속도 명령으로 바꿔 기존 보행 정책에 전달한다.
+`rapid_style.py`와 실제 관절 적용부는 역할을 나누지만 같은 실행 안에서 연결된다.
+
+이것은 **RAPID 스타일 Python 프로그램**이다. ABB의 `.mod` 파일이나 `MoveL pPick, ...;` 원문을 해석하는 ABB 컨트롤러는 아니다.
+물리 관절 목표 전송의 의미는 [Isaac Sim 6.2 공식 API](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/py/source/extensions/isaacsim.core.experimental.prims/docs/api.html)에서도 확인할 수 있다.
 
 RAPID 방식에서는 네 로봇이 모두 프로그램으로 움직인다. 명령의 모양은 같다 (목표, 속도, zone).
 
@@ -102,7 +129,7 @@ C:\isaacsim-6.2\python.bat factory_line_demo.py --headless --seconds 40
 - H1 골반 높이 0.8 m 초과(넘어지지 않음), 평균 0.25 m/s 넘게 보행
 - 정지 후 다시 재생한 뒤 10초 동안 H1이 서 있고 두 팔이 목표를 따라감
 
-`--headless`를 빼면 같은 점검을 GUI 창에서 한다. `--motion rapid`를 붙이면 RAPID 방식으로 점검하고 아래도 본다.
+`--headless`를 빼면 같은 점검을 GUI 창에서 한다. 기본 RAPID 실행은 아래 항목도 본다. `--motion time`을 붙이면 시간표 방식을 점검한다.
 
 - Kawasaki가 박스를 제때 집어 팔레트 칸 중심 0.01 m 이내에 놓았는가
 - KUKA가 박스 위를 나란히 갈 때 박스와의 x 차이가 0.03 m 미만인가

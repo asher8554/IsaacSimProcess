@@ -1,5 +1,31 @@
 # 컨텍스트 노트 — 결정과 이유
 
+## RAPID 기본 구동 적용 (2026-11-17)
+
+- 현재 코드와 Notion 실습 기록(https://www.notion.so/4163d76f887481588f07cd3d8ffe18c4)을 읽었다. 기존 `--motion rapid`는 이미 실제 관절 목표 전송까지 이어지지만 기본값은 `time`이었다.
+- 사용자 요구는 RAPID 스타일을 실제 실행에 사용하는 것이다. 중복 제어기를 만들지 않고 기존 경로를 기본값으로 선택한다. `--motion time`을 보존해 기존 시간표 사용자에게 전환 경로를 남긴다.
+- 상세 주석은 명령 작성부, 실행기, 센서 피드백, IK, 관절 전송 경계를 설명한다. 실제 파지 물리·ABB 구문 파서·새 UI는 추가하지 않는다.
+- 6.2 공식 관절 API에서 `set_dof_position_targets`가 순간이동이 아니라 구동기의 목표값을 설정하는 함수임을 확인했다. 현재 설치본에서 실제 실행으로 다시 검증한다.
+
+### 검증 결과
+
+- `C:\isaacsim-6.2\python.bat -m py_compile factory_line_demo.py rapid_style.py` 통과.
+- `C:\isaacsim-6.2\python.bat rapid_style.py`의 기존 7개 시험 모두 PASS. 실제 TCP 도착 전에 SetDO가 실행되지 않는 시험도 포함한다.
+- 소스의 argparse 설정만 AST로 추출해 기본값 `rapid`, 명시적 `rapid`, 기존 `time` 선택을 확인했다.
+- `C:\isaacsim-6.2\python.bat factory_line_demo.py --headless --seconds 40` 실행. `--motion` 없이 `[MOTION] rapid`와 `SELF-CHECK PASS`, 14개 항목 PASS를 확인했다. 시작 시각 -2초부터 40초까지 총 42초 구간과 재생 뒤 10초를 검사한다.
+- 두 팔 평균 TCP 오차 KUKA 0.0056 m / Kawasaki 0.0129 m. 박스 5개 적재, 칸 중심 최대 오차 0.0021 m. AMMR 최대 지연 0.103 m / x 도달 -6.20 m. H1 골반 최저 0.871 m / 42초 동안 19.2 m 이동. 재생 뒤 골반 최저 0.875 m, 두 팔 평균 오차 0.0087 m. 실시간 대비 0.72배.
+- 이번 실행의 6초·36초 렌더링을 직접 열어 로봇 자세, H1 보행, AMMR 위치 변화를 확인했다. 기존 캡처는 `out/rapid-default-20261117-074332/`에 보존하고 새 40초 실행 캡처는 그 아래 `validated-40s/`에 복사했다. 전체 로그는 같은 폴더의 `default-headless.log`다.
+- 환경 경고가 있다. Visual C++ runtime 14.29.30156.0이 빌드 기준 14.38.33145.0보다 오래됐고, 일부 로봇 에셋에 질량·관성 경고가 발생한다. 환경이나 에셋은 이번 작업에서 변경하지 않았다. 첫 PowerShell 실행은 stderr 경고를 NativeCommandError로 표시했다.
+- 종료 코드를 분리 확인하기 위해 cmd를 숨김 실행하고 stdout/stderr를 별도 파일로 저장해 `--headless --seconds 8`로 재검증했다. 다시 14개 항목 PASS / SELF-CHECK PASS였고 네이티브 종료 코드 0을 확인했다. 첫 도구 결과의 exit 1을 시뮬레이션 실패로 해석하지 않는다. `exit-check-stdout.log`, `exit-check-stderr.log`, `exit-code.txt`에 증거가 있다.
+- GUI 버튼 직접 조작·일시정지·장시간 구동·물리 접촉 파지는 검증 범위 밖이다. 장면 UI나 테마는 변경하지 않았다.
+
+### 재사용 후보
+
+- Knowledge. RAPID 명령 실행은 관절 목표 전송과 실제 상태 피드백이 연결되어야 완성된다. 이번 기본 실행에서 수치와 렌더링으로 확인했다.
+- Decision. RAPID를 기본값으로 한다. 사용자가 편하게 읽고 수정하는 프로그램과 실제 구동 경로를 일치시키기 위해서다.
+
+## 이전 작업 기록
+
 기준일 2026-11-12. Isaac Sim 6.2.0-rc.14 (`C:\isaacsim-6.2`), Windows 11, RTX 3070 8 GB.
 
 ## 결정

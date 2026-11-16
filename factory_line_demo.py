@@ -9,9 +9,14 @@ r"""실행: C:\isaacsim-6.2\python.bat factory_line_demo.py [--headless] [--seco
 ROS 2는 쓰지 않는다. 박스는 물리 없는 시각용 큐브이고 그리퍼 위치를 따라다닐 뿐이다.
 
 로봇 동작은 두 가지 방식으로 적혀 있고 --motion으로 고른다. 장면과 박스는 같다.
-- --motion time  (기본)  "몇 초에 어디"를 적은 시간표 방식. scan_target, palletize_target, AMMR_KEYS 참고.
-- --motion rapid         ABB RAPID처럼 "목표·속도·zone·tool"로 적은 방식. 네 로봇 모두 프로그램으로 움직인다.
+- --motion rapid (기본)  ABB RAPID처럼 "목표·속도·zone·tool"로 적은 방식. 네 로봇 모두 프로그램으로 움직인다.
                          scan_program, palletize_program, ammr_program, patrol_program 참고.
+- --motion time          "몇 초에 어디"를 적은 이전 시간표 방식. scan_target, palletize_target, AMMR_KEYS 참고.
+
+이 파일이 SimulationApp을 생성하므로 Isaac Sim을 별도로 열 필요가 없다.
+기본 실행의 제어 흐름은 다음과 같다. 명령은 설명용 예시가 아니라 매 물리 스텝의 구동에 쓰인다.
+    *_program()의 yield 명령 → RapidTask.step()의 지령 → on_physics_step()의 제어 → Isaac Sim 관절 구동기
+팔 두 대는 IK로, AMMR은 관절 목표로, H1은 보행 정책으로 같은 RAPID 스타일 명령을 실행한다.
 
 실행 중에 물체를 클릭하면 그 물체 윗면 가운데 좌표가 robtarget 한 줄로 출력된다 (on_stage_event 참고).
 """
@@ -36,10 +41,12 @@ parser.add_argument(
 parser.add_argument(
     "--motion",
     choices=["time", "rapid"],
-    default="time",
-    help="Kawasaki 적재 동작을 적는 방식. time은 시간표(palletize_target), rapid는 ABB RAPID 방식(palletize_program)",
+    default="rapid",
+    help="네 로봇의 구동 방식. rapid(기본)는 RAPID 스타일 프로그램, time은 이전 시간표 방식",
 )
 args, _ = parser.parse_known_args()
+# 별도 Isaac Sim 프로세스에 명령을 보내는 구조가 아니다. 이 Python 실행 안에서 앱과 물리 엔진을 시작한다.
+print(f"[MOTION] {args.motion} | " + ("RAPID programs -> robot drives" if args.motion == "rapid" else "legacy timetable -> robot drives"), flush=True)
 simulation_app = SimulationApp({"headless": args.headless})
 
 import math
@@ -253,12 +260,14 @@ def box_positions(t, gripper_pos):
     return out
 
 
-# ------------------------------------------------------------------ RAPID 방식 (--motion rapid)
+# ------------------------------------------------------------------ RAPID 프로그램 작성부 (기본 구동 방식)
 # 위쪽 함수들은 "몇 초에 어디"를 적은 시간표다. 같은 동작을 ABB RAPID처럼
 # "어디로(target), 얼마나 빨리(speed), 어떻게 지나서(zone), 무엇으로(tool)"라고 적은 것이 아래 프로그램들이다.
 # 명령의 뜻과 ABB와 다른 점은 rapid_style.py 맨 위에 적혀 있다.
 # 프로그램이 쓰는 목표(pPick, bOut 등)와 공구(tGripper 등)는 장면을 다 읽은 뒤에 등록한다.
 # 아래쪽 "RAPID 방식의 목표·공구 등록" 구역에 있다.
+# 동작을 바꾸려면 먼저 이 구역의 *_program()을 수정한다. scan_target/palletize_target은 --motion time 전용이다.
+# 프로그램 작성자는 MoveL 등의 명령으로 순서를 적는다. 관절 계산과 물리 스텝 호출은 아래 실행부가 담당한다.
 
 io = {"doGrip": 0}  # 출력 신호. doGrip이 1이면 그리퍼가 쥔 상태다
 cell = {"held": None, "placed": {}, "log": []}  # held는 쥐고 있는 박스 번호, placed는 {박스 번호: 놓인 [m] 좌표}
@@ -318,6 +327,12 @@ def palletize_program():
 
     yield 한 줄이 RAPID 명령 한 줄이다. 시간표 방식과 달리 "몇 초에"가 없다. 걸리는 시간은 거리와 속도로 정해지고,
     박스가 오는 시각과는 WaitUntil로 맞춘다.
+
+    이 함수 안의 PROC 예문은 설명이고, 아래의 실제 Python yield 문들이 로봇을 제어한다.
+    예를 들어 MoveL의 pPick을 바꾸면 RapidTask의 직선 경로가 바뀌고, IK가 그 경로를 관절 목표로 바꾼다.
+    fine에서 현재 TCP 위치가 목표의 5 mm 안에 들어온 뒤에만 다음 줄로 넘어간다.
+    SetDO는 io 딕셔너리를 바꾸며 frame()의 box_positions_rapid가 그 값으로 박스를 붙이거나 놓는다.
+    따라서 여기서 '쥔다'는 시각용 박스 연결이며 RG2 손가락의 물리 접촉 파지 명령은 아니다.
     """
     slot = 0  # 이번에 놓을 팔레트 칸 번호 (0, 1, 2)
     while True:
@@ -428,6 +443,8 @@ def joint_step(arm, jac, error):
     q = arm["robot"].get_dof_positions().numpy()[0, :6]
     # 관절 지령을 스텝당 0.01 rad (= 2 rad/s) 이내로 적분한다. 실제 관절보다 0.1 rad 넘게 앞서가지 않게 묶는다.
     arm["q_cmd"] = np.clip(arm["q_cmd"] + np.clip(0.3 * dq, -0.01, 0.01), q - 0.1, q + 0.1)
+    # 실제 Isaac Sim 제어 API를 호출하는 지점이다. 앞의 계산으로 얻은 각도를 첫 6개 팔 관절의 목표로 보낸다.
+    # 위치 자체를 덮어쓰는 순간이동이 아니다. PhysX의 관절 구동기가 게인·감쇠에 따라 이 목표를 따라간다.
     arm["robot"].set_dof_position_targets(arm["q_cmd"], dof_indices=list(range(6)))
 
 
@@ -444,6 +461,10 @@ def ik_step_pose(arm, tool, target_pos, target_rot, link_pos, link_rot, t):
     ik_step과 다른 점은 두 가지다. 손끝 링크가 아니라 tooldata로 정한 TCP를 맞추고,
     공구 축 방향만이 아니라 방향 전체 (rx, ry, rz)를 맞춘다.
     link_pos, link_rot은 link_pose(arm)으로 읽은 손끝 링크의 지금 실제 자세다.
+
+    target_pos/target_rot은 MoveL이 이번 스텝까지 진행시킨 지령이다. 최종 robtarget까지 한 번에 점프하지 않는다.
+    현재 TCP와 지령의 차이(error)를 만들고, 자코비안으로 필요한 관절 변화량을 계산한다.
+    마지막 joint_step()이 관절 목표를 실제 API에 보내므로 이 함수까지 호출되어야 로봇이 움직인다.
     """
     reach = link_rot.apply(tool["pos"])  # [m] 손끝 링크 원점에서 TCP까지의 벡터 (월드 기준)
     tcp_pos, tcp_rot = link_pos + reach, link_rot * tool["rot"]
@@ -760,6 +781,8 @@ def on_physics_step(dt, context):
                 arm["q_cmd"] = arm["home"].copy()  # IK가 적분해 가는 지령 관절각도 시작 자세로 되돌린다
             # RAPID 방식의 프로그램·신호·박스 상태도 처음으로 되돌린다. 프로그램은 첫 줄부터 다시 시작한다.
             # 로봇마다 태스크가 하나씩이다. H1은 걷는 로봇이라 walk=True로 만든다.
+            # scan_program()만 호출하면 제너레이터를 만들 뿐 로봇은 움직이지 않는다.
+            # 매 스텝의 step()이 yield 명령을 소비하고, 그 직후 아래 제어 API들이 지령을 로봇에 적용한다.
             state["tasks"] = {
                 "kuka": RapidTask(scan_program(), io),
                 "kawasaki": RapidTask(palletize_program(), io),
@@ -783,17 +806,21 @@ def on_physics_step(dt, context):
             # 팔 두 대. 프로그램이 지령 TCP 자세를 내놓고, IK가 TCP를 그 자세로 보낸다.
             for arm, name in ((kuka, "kuka"), (kawasaki, "kawasaki")):
                 link_pos, link_rot = link_pose(arm)  # 손끝 링크의 지금 실제 자세
+                # 1. 피드백을 실행기에 전달한다. fine의 도착 판정은 지령이 아니라 이 실측값을 사용한다.
                 tasks[name].step(dt, tcp=(link_pos, link_rot))
+                # 2. 실행기가 만든 지령 TCP를 IK에 넘긴다. joint_step의 관절 목표 전송까지 여기서 이어진다.
                 ik_step_pose(arm, tasks[name].tool, tasks[name].pos, tasks[name].rot, link_pos, link_rot, t)
             # AMMR. 프로그램이 지령 몸체 자세(월드 좌표)와 지령 팔 관절각을 내놓는다.
             # 베이스 관절값은 처음 놓은 자리(AMMR_HOME)가 0이므로 월드 좌표에서 그만큼 빼고 더한다.
             q = ammr.get_dof_positions().numpy()[0]
             tasks["ammr"].step(dt, base=(q[0] + AMMR_HOME[0], q[1] + AMMR_HOME[1], q[2]), joints=q[3:10])
             base, arm_joints = tasks["ammr"].base, tasks["ammr"].joints
+            # MoveBase는 차체용 가상 관절 3개, MoveAbsJ는 Panda 팔 7개에 대응한다. 바퀴 속도 제어는 아니다.
             ammr_targets = [base[0] - AMMR_HOME[0], base[1] - AMMR_HOME[1], base[2], *arm_joints]
             # H1. 프로그램은 "어디로 얼마나 빨리 걸어가라"는 목표만 내놓는다. 걷는 것은 보행 정책이 한다.
             tasks["h1"].step(dt, base=pose)
             goal = tasks["h1"].goal
+            # MoveBase 목표를 몸체 속도 [전진 m/s, 횡 m/s, 회전 rad/s]로 바꿔 아래 h1.step에 전달한다.
             command = walk_command(pose, None) if goal is None else walk_command(pose, goal[0], goal[1])
         else:
             # --- 시간표 방식. 지금 시각 t에 해당하는 목표를 시간표에서 꺼내 보낸다.
@@ -802,6 +829,7 @@ def on_physics_step(dt, context):
             ammr_targets = path(AMMR_KEYS, t)  # AMMR은 이 시각의 키프레임 값
             command = walk_command(pose, patrol_goal(pose))  # H1은 다음 순찰 지점 쪽으로
         # AMMR 관절 10개(베이스 3 + 팔 7)에 목표를 보낸다. 손가락 2개는 건드리지 않는다.
+        # RAPID/시간표 분기는 '목표를 만드는 방법'만 고른다. 어느 쪽도 이 실제 관절 구동 단계를 생략하지 않는다.
         ammr.set_dof_position_targets(ammr_targets, dof_indices=list(range(10)))
         state["ammr_x"] = ammr_targets[0]
         h1.step(dt, command)  # H1 정책에 속도 명령을 넘긴다. 관절 19개의 목표는 정책이 계산한다

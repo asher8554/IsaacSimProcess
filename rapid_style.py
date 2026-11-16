@@ -2,7 +2,18 @@
 r"""RobotStudio에서 쓰던 방식 그대로 "좌표 + 속도 + zone + tool"로 동작을 적을 수 있게 해 준다.
 
 산업용 로봇의 팔(MoveL)뿐 아니라 이동 로봇의 베이스(MoveBase), 관절 직접 이동(MoveAbsJ)도 같은 모양으로 적는다.
-Isaac Sim과 무관한 순수 계산이다. 그래서 이 파일만 따로 실행해 시험할 수 있다.
+이 파일은 명령 해석·경로 계산을 담당하고, factory_line_demo.py가 계산 결과를 Isaac Sim 관절에 적용한다.
+명령 계산과 시뮬레이터 API를 분리했으므로 이 파일만 따로 실행해 시험할 수도 있다.
+단독 실행은 시험이고 실제 로봇 장면 실행은 다음 명령이다.
+
+    C:\isaacsim-6.2\python.bat factory_line_demo.py
+
+실제 연결은 factory_line_demo.py의 on_physics_step()에 있다.
+    MoveL → pos/rot/tool → ik_step_pose() → joint_step() → set_dof_position_targets()
+    MoveAbsJ·MoveBase(AMMR) → joints/base → set_dof_position_targets()
+    MoveBase(H1) → goal → walk_command() → h1.step()의 보행 정책
+실제 로봇 상태는 다음 step()에 다시 들어와 fine 도착 여부와 명령 진행을 결정한다.
+아래 명령으로 이 파일만 실행하면 Isaac Sim 창을 열지 않고 수치 시험을 수행한다.
 
     C:\isaacsim-6.2\python.bat rapid_style.py
 
@@ -89,6 +100,8 @@ def Offs(target, dx, dy, dz):
 
 # ------------------------------------------------------------------ 명령
 # 프로그램은 이 명령들을 yield로 하나씩 내놓는다. 여기서는 내용을 묶어 두기만 하고 실행은 RapidTask가 한다.
+# 예. MoveL(...) 호출은 명령 튜플 생성, yield는 그 명령을 태스크에 전달, step(dt)는 경로를 dt만큼 진행한다.
+# 실제 관절 적용은 데모의 물리 콜백에서 이어진다. 이 함수 안에서 긴 이동이 끝날 때까지 기다리지 않는다.
 def MoveL(target, speed, zone, tool):
     """TCP를 robtarget까지 직선으로 보낸다. speed는 [m/s], zone은 [m]이다."""
     return ("MoveL", target, speed, zone, tool)
@@ -136,6 +149,8 @@ class RapidTask:
 
     step()을 부르고 나면 아래 값에 "지금 로봇이 있어야 할 상태"가 들어 있다. 그 상태로 로봇을 실제로
     보내는 일은 부르는 쪽이 한다.
+    이 저장소에서 그 호출부는 factory_line_demo.py의 on_physics_step()이다. 계산만 하고 버리는 경로가 아니다.
+    step()은 None을 반환한다. 아래 속성에 결과를 저장하므로 호출 직후 task.pos 등으로 읽어 적용한다.
 
         pos, rot, tool   MoveL이 만든 지령 TCP 위치 [m]·방향과 그때 쓴 tooldata. MoveL 전에는 None이다.
         joints           MoveAbsJ가 만든 지령 관절각 [rad].
@@ -165,6 +180,7 @@ class RapidTask:
 
         실제 상태는 두 곳에 쓴다. 프로그램을 시작할 때 "지금 여기서 출발한다"고 정하는 데와,
         정지점(fine)에서 로봇이 실제로 도착했는지 확인하는 데다.
+        여기서 time.sleep()으로 기다리면 물리 엔진도 멎는다. 대기 명령은 현재 스텝만 끝내고 다음 호출에서 재검사한다.
         """
         if self.joints is None and joints is not None:
             self.joints = np.array(joints, dtype=float)
@@ -172,6 +188,7 @@ class RapidTask:
             self.base = np.array(base, dtype=float)
         for _ in range(20):  # 시간이 안 드는 명령(SetDO, 이미 참인 WaitUntil)은 같은 스텝에 이어서 처리한다
             if self.command is None:
+                # 프로그램 포인터를 다음 yield까지 진행한다. 진행 중인 MoveL이 있으면 next()를 호출하지 않는다.
                 self.command = next(self.program)
                 self.waited = 0.0
                 if self.command[0] != self.kind:  # 종류가 바뀌면 속도 단위도 다르므로 0에서 다시 시작한다
@@ -193,6 +210,7 @@ class RapidTask:
                     self.command = None
                 break
             else:  # 움직이는 명령은 한 스텝에 하나만 진행한다
+                # 해당 이동기의 True는 명령 완료, False는 다음 물리 스텝에도 같은 명령을 계속 실행한다는 뜻이다.
                 moved = {"MoveL": self._move_l, "MoveAbsJ": self._move_abs_j, "MoveBase": self._move_base}[kind]
                 if moved(dt, tcp, joints, base):
                     self.command = None
