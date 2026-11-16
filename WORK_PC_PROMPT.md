@@ -34,29 +34,28 @@
 
 ### 파일 설명
 
-| 파일 | 줄 수 | 내용 |
-| --- | --- | --- |
-| `rapid_style.py` | 422 | RAPID 방식의 데이터·명령·실행기. numpy와 scipy만 쓴다. Isaac Sim 없이 단독 시험이 된다 |
-| `factory_line_demo.py` | 963 | Isaac Sim 6.2 standalone 예시. 창고에 컨베이어 라인을 만들고 로봇 4대(KUKA KR210, Kawasaki RS080N, Unitree H1, Ridgeback+Franka)를 움직인다 |
+| 파일 | 내용 |
+| --- | --- |
+| `rapid_style.py` | RAPID 방식의 데이터·명령·실행기. numpy와 scipy만 쓴다. Isaac Sim 없이 단독 시험이 된다 |
+| `factory_line_demo.py` | RAPID 전용 Isaac Sim 6.2 standalone 예시. 창고에 컨베이어 라인을 만들고 로봇 4대(KUKA KR210, Kawasaki RS080N, Unitree H1, Ridgeback+Franka)를 움직인다 |
 
 - 두 파일은 같은 폴더에 있어야 한다. `factory_line_demo.py`가 `rapid_style`을 import한다.
-- 기준 버전은 집 PC 저장소의 커밋 `b82bdb4`다.
+- 현재 전달할 버전은 저장소 HEAD다. `b82bdb4`는 시간표 코드가 포함된 과거 버전이므로 기준으로 되돌리지 않는다.
 - 설명은 파일 안 주석에 자세히 있다. **이 문서를 읽은 다음 두 파일을 처음부터 끝까지 읽는다.**
   특히 `rapid_style.py` 맨 위 설명(RAPID 대응표, ABB와 다른 점)과 `factory_line_demo.py`의 구역 머리말을 본다.
 
 `factory_line_demo.py`의 구역 순서는 아래와 같다.
 
 1. 라인 배치 (상수)
-2. 모션 계산 (시간표 방식 함수)
-3. RAPID 방식 (프로그램)
+2. RAPID 프로그램과 박스 신호 처리
+3. IK·보행 제어
 4. 장면 구성
 5. 로봇을 제어 대상으로 잡기
 6. RAPID 방식의 목표·공구 등록
-7. 실행 (물리 콜백)
-8. 클릭으로 좌표 찍기 (티칭)
-9. 메인 루프
-10. 자체 점검
-11. 종료
+7. 실행 상태·클릭 티칭·물리 콜백
+8. 메인 루프
+9. 자체 점검
+10. 종료
 
 ### 확인 순서
 
@@ -69,16 +68,16 @@
    <Isaac Sim 폴더>\python.bat rapid_style.py
    ```
 
-3. **예시 자체 점검 (시간표 방식).** `CHECK PASS` 11줄과 `SELF-CHECK PASS`가 나와야 한다.
+3. **예시 자체 점검.** `CHECK PASS` 14줄과 `SELF-CHECK PASS`가 나와야 한다.
 
    ```bash
    <Isaac Sim 폴더>\python.bat factory_line_demo.py --headless --seconds 40
    ```
 
-4. **예시 자체 점검 (RAPID 방식).** `CHECK PASS` 14줄과 `SELF-CHECK PASS`가 나와야 한다.
+4. **박스 신호 회귀 시험.** 3개 시험이 통과해야 한다.
 
    ```bash
-   <Isaac Sim 폴더>\python.bat factory_line_demo.py --headless --seconds 40 --motion rapid
+   <Isaac Sim 폴더>\python.bat -m unittest discover -s tests -v
    ```
 
 5. **화면 확인.** 자체 점검이 `out/` 폴더에 PNG 4장을 남긴다. 그 이미지를 직접 열어 로봇과 박스가 보이는지 확인한다.
@@ -90,13 +89,13 @@
 - 회사망에서 에셋 서버가 막혀 있으면 3번이 실패한다. 그때는 6절을 따른다.
 - 집 PC에서 잰 값은 아래와 같다. 값이 크게 다르면 환경 차이를 의심한다.
 
-| 항목 | 시간표 방식 | RAPID 방식 |
-| --- | --- | --- |
-| KUKA 손끝 오차 평균 / 최대 | 0.0056 / 0.0140 m | 0.0056 / 0.0187 m |
-| Kawasaki 손끝 오차 평균 / 최대 | 0.0140 / 0.0914 m | 0.0129 / 0.0471 m |
-| AMMR 베이스 최대 지연 | 0.114 m | 0.103 m |
-| H1 골반 최저 높이 | 0.873 m | 0.871 m |
-| 실시간 대비 속도 (RTX 3070 8 GB) | 0.78배 | 0.72배 |
+| 항목 | RAPID 방식 |
+| --- | --- |
+| KUKA 손끝 오차 평균 / 최대 | 0.0056 / 0.0187 m |
+| Kawasaki 손끝 오차 평균 / 최대 | 0.0129 / 0.0471 m |
+| AMMR 베이스 최대 지연 | 0.103 m |
+| H1 골반 최저 높이 | 0.871 m |
+| 실시간 대비 속도 (RTX 3070 8 GB) | 0.72배 |
 
 ---
 
@@ -149,11 +148,11 @@ def pick_program():
 - 파이썬 고유 문법(`yield` 등)은 RAPID의 익숙한 개념(프로그램 포인터 등)에 빗대 설명한다.
 - 직접 돌려 보지 않은 것은 주석에 그렇게 적는다.
 
-### 4.4 시간표 방식은 지우지 않는다
+### 4.4 RAPID 전용 구동을 유지한다
 
-`--motion time`(기본)과 `--motion rapid`가 같이 있다. 사용자가 시간표 방식도 보존하라고 했다.
-새 로봇을 넣을 때는 RAPID 방식 프로그램부터 만들고, 시간표 방식이 필요한지는 사용자에게 묻는다.
-기존 로봇의 시간표 방식 함수는 그대로 둔다.
+사용자의 2026-11-17 후속 요청으로 시간표 구동 코드와 모드 선택을 제거했다.
+새 로봇도 RAPID 스타일 프로그램으로 작성한다. 로봇의 IK·관절 전송·보행 정책은 그 명령을 실행하는 필수 제어 계층이다.
+이전 구현은 Git 이력에만 두며 현재 소스에 다시 추가하지 않는다.
 
 ### 4.5 검증 규칙
 

@@ -15,7 +15,7 @@ Isaac Sim 6.2에서 산업용 로봇 2대, 휴머노이드 1대, AMMR 1대가 �
 | AMMR | Clearpath Ridgeback + Franka | 적재 팔레트와 출하 버퍼 사이를 왕복하고 팔을 뻗음 | RAPID 스타일 베이스·관절 목표 |
 
 택트 타임은 8초다. 박스는 0.225 m/s로 흐르고 8초마다 1개씩 적재된다.
-AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다. 이전 시간표 방식의 왕복 주기는 40초다.
+AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다.
 
 ## 실행
 
@@ -29,23 +29,15 @@ C:\isaacsim-6.2\python.bat factory_line_demo.py
 
 **첫 실행은 오래 걸린다.** 창고·로봇 에셋 약 1 GB를 인터넷에서 받는다. 이 PC에서 약 12분 걸렸다. 그 뒤로는 캐시를 써서 약 30초 만에 뜬다.
 
-## 동작을 적는 두 가지 방식
+## RAPID 스타일로 동작 작성
 
-네 로봇의 동작을 두 방식으로 적어 두었다. **기본값은 RAPID 방식**이고 `--motion`으로 고른다. 장면과 박스는 같다.
-아래 비교표는 Kawasaki 적재를 예로 들었다.
+네 로봇은 RAPID 스타일 프로그램으로만 움직인다. 목표 좌표·속도·zone·tool과 명령 순서를 적는다.
 
-```bash
-C:\isaacsim-6.2\python.bat factory_line_demo.py --motion rapid
+```python
+yield MoveL(pPick, v1000, fine, tGripper)  # 집는 점까지 이동한 뒤 실제 TCP 도착을 기다린다.
+yield WaitUntil(box_at_pick)  # 박스 도착 신호를 기다린다.
+yield SetDO("doGrip", 1)  # 박스를 TCP에 붙인다.
 ```
-
-| | 시간표 방식 (`--motion time`) | RAPID 방식 (기본, `--motion rapid`) |
-| --- | --- | --- |
-| 코드 | `palletize_target` | `palletize_program` + `rapid_style.py` |
-| 적는 것 | 몇 초에 손끝이 어디 있는가 | 어디로(robtarget), 속도(v1000), zone(z50·fine), tool(tooldata) |
-| 걸리는 시간 | 시간표에 적은 그대로 | 거리와 속도로 정해진다 |
-| 박스와 맞추는 법 | 박스와 같은 시계를 쓴다 | `WaitUntil(box_at_pick)`으로 박스를 기다린다 |
-| 박스를 쥐고 놓는 때 | 정해진 시각 | `SetDO("doGrip", 1)`과 `SetDO("doGrip", 0)` |
-| 맞추는 방향 | 공구 축이 아래를 보게만 | (rx, ry, rz) 전체 |
 
 RAPID 방식은 ABB와 단위가 다르다. 길이는 m, 속도는 m/s다. `v1000`은 1.0 m/s, `z50`은 0.05 m다.
 방향은 오일러 각 (rx, ry, rz) [deg]로 적고 `rx = 180`이 공구가 바닥을 보는 자세다 (ABB 쿼터니언 [0, 1, 0, 0]).
@@ -58,7 +50,7 @@ C:\isaacsim-6.2\python.bat rapid_style.py
 ```
 
 위 명령은 실행기의 수치 시험이다. 로봇 장면을 실행하려면 `factory_line_demo.py`를 실행한다.
-기존 시간표 실행이 필요하면 `C:\isaacsim-6.2\python.bat factory_line_demo.py --motion time`을 사용한다.
+실행 방식 선택 옵션은 없다. 이전 `--motion` 옵션은 제거했다.
 
 ## RAPID 명령이 실제 로봇을 움직이는 과정
 
@@ -83,18 +75,17 @@ H1의 `MoveBase`는 목적지를 몸체 속도 명령으로 바꿔 기존 보행
 
 RAPID 방식에서는 네 로봇이 모두 프로그램으로 움직인다. 명령의 모양은 같다 (목표, 속도, zone).
 
-| 로봇 | 시간표 방식 | RAPID 방식 프로그램 | 쓰는 명령 |
-| --- | --- | --- | --- |
-| KUKA | `scan_target` | `scan_program` | `MoveL`, `WaitUntil` |
-| Kawasaki | `palletize_target` | `palletize_program` | `MoveL`, `WaitUntil`, `SetDO`, `WaitTime` |
-| AMMR | `AMMR_KEYS` | `ammr_program` | `MoveBase`(몸체), `MoveAbsJ`(팔), `WaitTime` |
-| H1 | `H1_WAYPOINTS` | `patrol_program` | `MoveBase`(걷기) |
+| 로봇 | 동작 프로그램 | 쓰는 명령 |
+| --- | --- | --- |
+| KUKA | `scan_program` | `MoveL`, `WaitUntil` |
+| Kawasaki | `palletize_program` | `MoveL`, `WaitUntil`, `SetDO`, `WaitTime` |
+| AMMR | `ammr_program` | `MoveBase`(몸체), `MoveAbsJ`(팔), `WaitTime` |
+| H1 | `patrol_program` | `MoveBase`(걷기) |
 
 - `MoveBase(basetarget(x, y, rz), v500, fine)`는 RAPID에 없는 명령이다. 이동 로봇의 몸체를 바닥 위 (x, y) [m]와 방향 rz [deg]로 보낸다.
   AMMR은 직선으로 가면서 방향도 맞춘다. H1은 목표 쪽으로 걸어가고 도착 방향은 맞추지 않는다.
 - `MoveAbsJ(jointtarget(...), 45.0, fine)`의 속도는 [deg/s] 가장 많이 움직이는 관절의 속도다.
-- KUKA는 어느 방식에서도 컨베이어 트래킹이 아니다. 박스나 벨트의 위치를 읽지 않는다.
-  시간표 방식은 같은 시계로 시각만 맞추고, RAPID 방식은 박스가 시작 위치에 온 신호를 받아 벨트와 같은 속도로 직선 이동한다.
+- KUKA는 컨베이어 트래킹이 아니다. 박스가 시작 위치에 온 신호를 받아 벨트와 같은 속도로 직선 이동한다.
 
 ## 좌표를 찍는 방법 (티칭)
 
@@ -129,24 +120,24 @@ C:\isaacsim-6.2\python.bat factory_line_demo.py --headless --seconds 40
 - H1 골반 높이 0.8 m 초과(넘어지지 않음), 평균 0.25 m/s 넘게 보행
 - 정지 후 다시 재생한 뒤 10초 동안 H1이 서 있고 두 팔이 목표를 따라감
 
-`--headless`를 빼면 같은 점검을 GUI 창에서 한다. 기본 RAPID 실행은 아래 항목도 본다. `--motion time`을 붙이면 시간표 방식을 점검한다.
+`--headless`를 빼면 같은 점검을 GUI 창에서 한다. 아래 항목도 함께 검사한다.
 
 - Kawasaki가 박스를 제때 집어 팔레트 칸 중심 0.01 m 이내에 놓았는가
 - KUKA가 박스 위를 나란히 갈 때 박스와의 x 차이가 0.03 m 미만인가
 
-두 방식 모두 팔레트를 선택했을 때 클릭 티칭이 그 윗면 가운데를 보고하는지도 본다.
+팔레트를 선택했을 때 클릭 티칭이 그 윗면 가운데를 보고하는지도 본다.
+
+박스의 신호 기반 파지·해제와 초기 배치는 `C:\isaacsim-6.2\python.bat -m unittest discover -s tests -v`로 별도 검사한다.
 
 ## 바꿔 보기
 
-모두 `factory_line_demo.py` 위쪽 상수다.
+모두 `factory_line_demo.py` 안에 있다. 동작 순서는 프로그램 작성부, 좌표·공구는 목표·공구 등록부를 수정한다.
 
 - `TAKT`, `BELT_V` — 라인 속도. `X_OUT - X_IN = 3 * TAKT * BELT_V`를 유지해야 박스가 집히는 순간과 맞는다.
-- `scan_target`, `palletize_target` — 두 산업용 로봇의 손끝 경로 (시간표 방식).
 - `pPick`, `pPallet`, `tGripper`, `palletize_program` — Kawasaki의 목표 좌표·공구·프로그램 (RAPID 방식).
 - `pScanStart`, `pScanEnd`, `tScanner`, `scan_program` — KUKA의 목표 좌표·공구·프로그램 (RAPID 방식).
 - `bOut`, `bBuf`, `jTuck`, `jReach`, `ammr_program` — AMMR의 몸체 목표·팔 관절 목표·프로그램 (RAPID 방식).
 - `patrol_program` — H1 순찰 프로그램 (RAPID 방식).
-- `AMMR_KEYS` — AMMR 베이스 위치·방향과 팔 자세 키프레임.
 - `H1_WAYPOINTS` — 휴머노이드 순찰 지점.
 
 ## 제한
