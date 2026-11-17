@@ -1,0 +1,70 @@
+# Codex?? ????? ECC ?? 64?
+
+???? ECC?? ??? ??? ????? ??? ? ????. Python?JS/TS?Windows?????? ????? ??? ?? ????, ?? ?? ? ?? ?? ?? ?????? ????. ?? ?? ??? ??? ??? ???.
+
+?? SKILL.md???????? ?? ??. Codex config.toml? ?? skills.config ??? ????? enabled = true? ??? ?? ?????. ???? ??? Codex? ??? ?? ??? ????. Claude?Orca? ?? ??? ???? ???.
+
+- `ecc:agent-payment-x402`.
+- `ecc:bengali-nlp`.
+- `ecc:brand-discovery`.
+- `ecc:brand-voice`.
+- `ecc:carrier-relationship-management`.
+- `ecc:competitive-platform-analysis`.
+- `ecc:competitive-report-structure`.
+- `ecc:content-engine`.
+- `ecc:counterparty-channel-discipline`.
+- `ecc:crosspost`.
+- `ecc:customer-billing-ops`.
+- `ecc:customs-trade-compliance`.
+- `ecc:defi-amm-security`.
+- `ecc:email-ops`.
+- `ecc:energy-procurement`.
+- `ecc:esign-field-placement`.
+- `ecc:evm-token-decimals`.
+- `ecc:finance-billing-ops`.
+- `ecc:healthcare-cdss-patterns`.
+- `ecc:healthcare-emr-patterns`.
+- `ecc:healthcare-eval-harness`.
+- `ecc:healthcare-phi-compliance`.
+- `ecc:hipaa-compliance`.
+- `ecc:inventory-demand-planning`.
+- `ecc:investor-materials`.
+- `ecc:investor-outreach`.
+- `ecc:ito-baskets`.
+- `ecc:laravel-patterns`.
+- `ecc:laravel-plugin-discovery`.
+- `ecc:laravel-security`.
+- `ecc:laravel-tdd`.
+- `ecc:laravel-verification`.
+- `ecc:lead-intelligence`.
+- `ecc:llm-trading-agent-security`.
+- `ecc:logistics-exception-management`.
+- `ecc:market-research`.
+- `ecc:marketing-campaign`.
+- `ecc:master-agreement-generator`.
+- `ecc:messages-ops`.
+- `ecc:ml-adoption-playbook`.
+- `ecc:nutrient-document-processing`.
+- `ecc:osint-investigation`.
+- `ecc:perl-patterns`.
+- `ecc:perl-security`.
+- `ecc:perl-testing`.
+- `ecc:prediction-market-oracle-research`.
+- `ecc:prediction-market-risk-review`.
+- `ecc:production-scheduling`.
+- `ecc:quality-nonconformance`.
+- `ecc:quarkus-patterns`.
+- `ecc:quarkus-security`.
+- `ecc:quarkus-tdd`.
+- `ecc:quarkus-verification`.
+- `ecc:returns-reverse-logistics`.
+- `ecc:roundhouse-x402`.
+- `ecc:scientific-db-pubmed-database`.
+- `ecc:scientific-pkg-gget`.
+- `ecc:seo`.
+- `ecc:short-video-distribution`.
+- `ecc:social-graph-ranker`.
+- `ecc:social-publisher`.
+- `ecc:visa-doc-translate`.
+- `ecc:x-api`.
+- `ecc:yoruba-localization-testing`.
