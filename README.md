@@ -7,21 +7,47 @@ Isaac Sim 6.2에서 산업용 로봇 2대, 휴머노이드 1대, AMMR 1대가 �
 
 ## 구성
 
-| 역할 | 로봇 | 동작 | 구동 방식 |
+네 로봇 모두 RAPID 스타일 프로그램으로 움직인다. 아래 "실제 구동"은 프로그램 명령을 관절에 전달하는 하위 방식이다.
+
+| 역할 | 로봇 | 동작 | 실제 구동 |
 | --- | --- | --- | --- |
-| 산업용 로봇 A | KUKA KR210 L150 | 컨베이어 위 박스를 벨트 속도로 따라가며 검사 | 미분 IK |
-| 산업용 로봇 B | Kawasaki RS080N + RG2 | 벨트 끝에서 박스를 들어 팔레트 3칸에 차례로 적재 | 미분 IK |
-| 휴머노이드 | Unitree H1 | 라인 옆 통로를 사각형으로 순찰 보행 | Isaac Sim 내장 보행 정책 |
-| AMMR | Clearpath Ridgeback + Franka | 적재 팔레트와 출하 버퍼 사이를 왕복하고 팔을 뻗음 | RAPID 스타일 베이스·관절 목표 |
+| 산업용 로봇 A | KUKA KR210 L150 | 컨베이어 위 박스를 벨트 속도로 따라가며 검사 | `MoveL` → 미분 IK |
+| 산업용 로봇 B | Kawasaki RS080N + RG2 | 벨트 끝에서 박스를 들어 팔레트 3칸에 차례로 적재 | `MoveL` → 미분 IK |
+| 휴머노이드 | Unitree H1 | 라인 옆 통로를 사각형으로 순찰 보행 | `MoveBase` → Isaac Sim 내장 보행 정책 |
+| AMMR | Clearpath Ridgeback + Franka | 적재 팔레트와 출하 버퍼 사이를 왕복하고 팔을 뻗음 | `MoveBase`·`MoveAbsJ` → 차체·팔 관절 목표 |
 
 택트 타임은 8초다. 박스는 0.225 m/s로 흐르고 8초마다 1개씩 적재된다.
 AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다.
+
+## 파일 구성
+
+| 파일 | 내용 |
+| --- | --- |
+| `factory_line_demo.py` | Isaac Sim 장면 구성, 네 로봇의 RAPID 스타일 프로그램, 물리 콜백, 자체 점검 |
+| `rapid_style.py` | `robtarget`·`MoveL` 등 RAPID 스타일 데이터·명령과 실행기 `RapidTask`. numpy·scipy만 쓴다 |
+| `tests/test_box_signals.py` | 박스 신호·파지·초기 배치 단위 테스트 |
+| `WORK_PC_PROMPT.md` | 다른 PC에서 에이전트에게 이 방식으로 이어서 작업시키는 인계 프롬프트 |
+| `docs/rapid-execution-plan.md` | RAPID 방식 적용 계획 기록 |
+| `checklist.md`, `context-notes.md` | 작업 체크리스트와 결정 기록 |
+
+`docs/codex-warning-fix/`는 개발 환경(Codex 설정) 수정 기록이며 시뮬레이션과 관계없다.
+
+## 요구 사항
+
+- Windows, Isaac Sim 6.2 (`C:\isaacsim-6.2`에 설치한 기준). 다른 위치면 아래 명령의 경로를 바꾼다.
+- NVIDIA RTX GPU (RTX 3070 8 GB에서 확인).
+- 첫 실행 때 인터넷 연결 (에셋 다운로드).
 
 ## 실행
 
 ```bash
 C:\isaacsim-6.2\python.bat factory_line_demo.py
 ```
+
+| 옵션 | 뜻 |
+| --- | --- |
+| `--headless` | 창 없이 실행 |
+| `--seconds N` | 시뮬레이션 N초만 돌리고 자체 점검 후 종료. 0(기본)이면 창을 닫을 때까지 실행 |
 
 이 명령 하나가 Isaac Sim을 시작하고 네 로봇의 RAPID 스타일 프로그램을 실행한다. Isaac Sim을 따로 실행할 필요가 없다.
 터미널에 `[MOTION] rapid | RAPID programs -> robot drives`가 출력된다.
