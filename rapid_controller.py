@@ -29,6 +29,9 @@ ABB EGM이나 KUKA RSI처럼 외부 PC가 지령을 스트리밍하는 방식이
 """
 
 import math
+import os
+import sys
+import threading
 
 # line_common을 맨 먼저 불러온다. 그 안에서 RMW를 정하고 Isaac Sim에 들어 있는 rclpy 폴더를 찾을 수 있게 한다.
 # 그래서 아래 rclpy·메시지 import보다 앞에 있어야 한다.
@@ -352,6 +355,8 @@ class RapidController(Node):
 
 
 def main():
+    if "--child" in sys.argv:  # factory_line_demo.py가 띄웠다. 부모가 끝나 stdin 파이프가 닫히면 같이 끝난다
+        threading.Thread(target=lambda: (sys.stdin.read(), os._exit(0)), daemon=True).start()
     rclpy.init()  # ROS 2 통신을 시작한다. 같은 네트워크(같은 ROS_DOMAIN_ID)의 다른 노드를 찾기 시작한다
     node = RapidController()
     try:

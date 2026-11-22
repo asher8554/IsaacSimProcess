@@ -158,7 +158,7 @@ RAPID 방식 (`--motion rapid`, 헤드리스 42 s, 2026-11-12).
 ## 검토 수정 (2026-11-22)
 
 - 자체 점검의 `np.max`가 지령 0개일 때 빈 배열 예외로 판정 전에 죽었다. `max(..., default=math.inf)`로 바꿔 FAIL로 보고한다.
-- 컨트롤러 자식 프로세스는 `atexit.register(controller.terminate)`로 정리한다. Kit의 자동 종료(`SimulationApp._atexit_close`)도 atexit이고 우리가 나중에 등록하므로 먼저 실행된다. 정상 종료 경로는 `close()`가 `os._exit`하므로 기존 명시적 `terminate()`를 유지한다.
+- 컨트롤러 자식 프로세스 정리는 stdin 파이프로 한다. 데모가 `stdin=PIPE`, `--child`로 띄우고 컨트롤러는 stdin EOF에서 `os._exit(0)`한다. 처음 쓴 `atexit`는 Ctrl+C에서 실패했다. Kit의 SIGINT 처리기(`simulation_app.py` `signal_handler`)가 `app.shutdown()`·`unload_all_plugins()` 중에 프로세스를 끝내 atexit이 돌지 않는다(2026-11-22 `_thread.interrupt_main()` 재현). 파이프 방식은 Ctrl+C·예외·강제 종료 모두에서 닫힌다. Ctrl+C 재현으로 확인.
 - 미등록 tooldata는 `StopIteration` 대신 TOOLS에 추가하라는 `ValueError`를 낸다.
 - 속도. 같은 날 같은 PC에서 HEAD(분리 전) 0.47x, 분리 후 0.32~0.36x(컨트롤러 유무와 무관). 차이 약 4 ms/스텝 = 빈 `spin_once(0)` 20회(회당 0.194 ms 실측). 처리한 메시지가 없으면 반복을 멈춰 0.45x. 대가로 지령은 항상 한 스텝(5 ms) 늦게 적용되고 자체 점검 수치는 그대로다.
 - 이전 기록 0.72x는 다른 날 측정이라 직접 비교하지 않는다. 측정 중 다른 Isaac·RL 작업이 돌면 결과가 0.07x까지 떨어졌다.

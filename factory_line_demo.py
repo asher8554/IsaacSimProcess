@@ -25,7 +25,6 @@ ROS 2 노드 두 개로 나뉘어 있다. 이 파일은 그중 Isaac Sim 노드(
 """
 
 import argparse
-import atexit
 import os
 import subprocess
 import sys
@@ -470,10 +469,9 @@ executor.add_node(ros)
 here = os.path.dirname(os.path.abspath(__file__))
 controller = None
 if not args.no_controller:
-    controller = subprocess.Popen([sys.executable, os.path.join(here, "rapid_controller.py")], cwd=here)
+    # stdin 파이프는 이 프로세스가 어떻게 끝나든(Ctrl+C·예외·강제 종료) 닫힌다. 컨트롤러는 그것을 보고 따라 끝난다.
+    controller = subprocess.Popen([sys.executable, os.path.join(here, "rapid_controller.py"), "--child"], cwd=here, stdin=subprocess.PIPE)
     print(f"[ROS2] started /rapid_controller (pid {controller.pid})", flush=True)
-    # 예외나 Ctrl+C로 끝나도 컨트롤러가 남지 않게 한다. Kit의 자동 종료보다 늦게 등록했으므로 먼저 실행된다.
-    atexit.register(controller.terminate)
 
 
 def fresh(msg):
