@@ -1,7 +1,7 @@
 ---
 name: pitfalls
 description: 실패에서 배운 함정. 같은 증상이 보이면 여기부터 본다
-updated: 2026-11-22
+updated: 2026-11-23
 ---
 
 ## IK 지령은 따로 적분한다
@@ -15,6 +15,8 @@ numpy·scipy·torch 계산 스레드가 물리·화면 스레드와 CPU를 다�
 
 ## 빈 spin_once 비용
 번들 rclpy `spin_once(timeout_sec=0)`는 할 일이 없어도 약 0.19 ms. 매 스텝 20번이면 4 ms. 처리한 메시지가 없으면 멈춘다 (2026-11-22).
+단, 그 전에 방금 보낸 `/clock`에 대한 두 팔의 답(같은 stamp)을 최대 5 ms 기다린다. 안 기다리면 시뮬레이션이 컨트롤러를 앞질러 지령 지연이 114 ms까지 늘고, 60초 실행에서 Kawasaki 평균 오차 0.047 m·스캔 어긋남 0.057 m로 FAIL했다. 기다린 뒤 0.0 ms, 15/15 PASS, 0.57x (2026-11-23).
+이전: 처리한 메시지가 없으면 바로 멈추기만 했다 (2026-11-22). 40초 실행은 통과해 놓쳤다.
 
 ## Kit의 Ctrl+C는 atexit을 건너뛴다
 `SimulationApp`의 SIGINT 처리기가 `app.shutdown()`·`unload_all_plugins()` 중 프로세스를 끝낸다. 정리 작업을 atexit에 맡기지 않는다 (2026-11-22, `_thread.interrupt_main()`으로 재현).
