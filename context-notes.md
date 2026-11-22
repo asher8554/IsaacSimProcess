@@ -1,5 +1,15 @@
 # 컨텍스트 노트 — 결정과 이유
 
+## ROS 2 노드 분리 (2026-11-17)
+
+- 사용자 요청. 시뮬레이션을 ROS 2로 연결하되 RAPID 스타일 프로그램은 유지한다.
+- 구조. Isaac Sim 프로세스는 로봇 본체와 저수준 제어(IK·관절 구동·보행 정책)와 센서를 맡는 `/isaac_sim` 노드다. 별도 프로세스 `rapid_controller.py`가 RAPID 프로그램 4개를 돌리는 `/rapid_controller` 노드다. 산업용 로봇의 외부 PC가 EGM·RSI처럼 지령을 스트리밍하는 방식 1에 해당한다.
+- 통신 선택은 Notion `ROS2 Humble 구조 암기 지도 - ABB RAPID 기준`의 대응을 따른다. 계속 변하는 상태·입력 신호는 Topic, `SetDO`는 Service(`std_srvs/SetBool`)다. `MoveL`은 Action이 아니다. 경로 보간을 컨트롤러가 하고 매 스텝 지령만 보내는 구조라서다. Action으로 바꾸려면 Isaac Sim 쪽이 보간을 맡는 방식 2로 바꿔야 한다.
+- 메시지는 번들에 있는 표준 타입만 쓴다. Windows에서 사용자 인터페이스 패키지를 빌드하지 않기 위해서다. TCP 지령은 `TransformStamped`이고 `child_frame_id`에 tool 이름을 넣는다. tool이 바뀌어도 시뮬레이터가 같은 tooldata로 IK를 한다.
+- RMW는 `rmw_fastrtps_cpp`로 고정한다. Isaac Sim 6.2의 `python.bat`→`setup_ros_env.bat`이 기본값을 `rmw_zenoh_cpp`로 정하는데, Zenoh는 라우터(`rmw_zenohd`)를 따로 띄워야 프로세스끼리 찾는다. FastDDS는 라우터 없이 두 프로세스 송수신을 확인했다.
+- 번들 rclpy 폴더(`exts/isaacsim.ros2.core/jazzy/rclpy`)를 PYTHONPATH 앞에 두면 그 안의 numpy가 Isaac Sim numpy를 가려 DLL 오류가 난다. `sys.path` 끝에 붙인다.
+- 시계는 `/clock`(시뮬레이션 시작부터의 시간)이다. 컨트롤러는 `/clock`을 받을 때마다 그 시간차로 프로그램을 진행한다. 시계가 뒤로 가면 정지 후 재생으로 보고 프로그램을 처음부터 다시 만든다. 시뮬레이터는 자기 시계보다 미래 시각이 찍힌 지령(이전 실행에서 늦게 도착한 것)을 버린다.
+
 ## RAPID 전용 정리 (2026-11-17 후속)
 
 - 사용자가 RAPID 이외의 로봇 구동 프로그램 삭제를 명시했다. 이전의 시간표 비교용 보존 결정을 대체한다. Git 이력으로 이전 구현은 복구할 수 있다.
@@ -144,3 +154,11 @@ RAPID 방식 (`--motion rapid`, 헤드리스 42 s, 2026-11-12).
 | 클릭 티칭이 보고한 점과 팔레트 윗면 중심의 거리 | 0.0020 m |
 | 정지 후 재생 뒤 H1 골반 최저 / 두 팔 오차 평균 | 0.875 m / 0.0087 m |
 | 실시간 대비 | 0.72배 (시간표 방식 0.78배) |
+
+## 검토 수정 (2026-11-22)
+
+- 자체 점검의 `np.max`가 지령 0개일 때 빈 배열 예외로 판정 전에 죽었다. `max(..., default=math.inf)`로 바꿔 FAIL로 보고한다.
+- 컨트롤러 자식 프로세스는 `atexit.register(controller.terminate)`로 정리한다. Kit의 자동 종료(`SimulationApp._atexit_close`)도 atexit이고 우리가 나중에 등록하므로 먼저 실행된다. 정상 종료 경로는 `close()`가 `os._exit`하므로 기존 명시적 `terminate()`를 유지한다.
+- 미등록 tooldata는 `StopIteration` 대신 TOOLS에 추가하라는 `ValueError`를 낸다.
+- 속도. 같은 날 같은 PC에서 HEAD(분리 전) 0.47x, 분리 후 0.32~0.36x(컨트롤러 유무와 무관). 차이 약 4 ms/스텝 = 빈 `spin_once(0)` 20회(회당 0.194 ms 실측). 처리한 메시지가 없으면 반복을 멈춰 0.45x. 대가로 지령은 항상 한 스텝(5 ms) 늦게 적용되고 자체 점검 수치는 그대로다.
+- 이전 기록 0.72x는 다른 날 측정이라 직접 비교하지 않는다. 측정 중 다른 Isaac·RL 작업이 돌면 결과가 0.07x까지 떨어졌다.

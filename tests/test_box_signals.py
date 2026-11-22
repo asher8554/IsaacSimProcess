@@ -1,23 +1,28 @@
 # RAPID 출력 신호에 따른 박스 대기·파지·해제와 초기 배치를 검증한다.
 import ast
 from pathlib import Path
+import sys
 import unittest
 
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import line_common  # noqa: E402
+
 
 class BoxSignalTests(unittest.TestCase):
     def setUp(self):
-        # 데모 전체를 import하면 Isaac Sim이 뜨므로 박스 계산과 필요한 상수만 실제 소스에서 읽는다.
-        source = Path(__file__).resolve().parents[1] / "factory_line_demo.py"
-        names = {"TAKT", "BELT_V", "BELT_Z", "BOX", "X_IN", "X_OUT", "PALLET_TOP", "PALLET_OUT", "SLOT_X", "io", "cell"}
+        # 데모 전체를 import하면 Isaac Sim이 뜨므로 박스 계산 함수와 상태만 실제 소스에서 읽는다.
+        # 라인 배치 상수는 두 노드가 같이 쓰는 line_common.py에서 가져온다.
+        source = ROOT / "factory_line_demo.py"
         nodes = []
         for node in ast.parse(source.read_text(encoding="utf-8")).body:
             if isinstance(node, ast.FunctionDef) and node.name in {"waiting_box", "box_positions_rapid"}:
                 nodes.append(node)
-            elif isinstance(node, ast.Assign) and any(isinstance(n, ast.Name) and n.id in names for target in node.targets for n in ast.walk(target)):
+            elif isinstance(node, ast.Assign) and any(isinstance(n, ast.Name) and n.id in {"io", "cell"} for target in node.targets for n in ast.walk(target)):
                 nodes.append(node)
-        self.ns = {"np": np}
+        self.ns = {"np": np, **{k: v for k, v in vars(line_common).items() if k.isupper()}}
         exec(compile(ast.Module(body=nodes, type_ignores=[]), str(source), "exec"), self.ns)
         self.positions = self.ns["box_positions_rapid"]
 

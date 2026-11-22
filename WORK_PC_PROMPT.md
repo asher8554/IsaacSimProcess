@@ -21,41 +21,46 @@
 
 ## 2. 너의 역할
 
-너는 이 폴더의 두 파일을 출발점으로 삼아, 1절에 적힌 업무 상황에 맞는 Isaac Sim 시뮬레이션을 만든다.
+너는 이 폴더의 파이썬 파일들을 출발점으로 삼아, 1절에 적힌 업무 상황에 맞는 Isaac Sim 시뮬레이션을 만든다.
 사용자는 ABB RobotStudio와 RAPID에 익숙한 로봇 엔지니어이고 Isaac Sim과 파이썬은 배우는 중이다.
-코드를 새로 설계하지 말고 **두 파일이 이미 쓰는 방식을 그대로 이어 간다.** 방식의 내용은 4절에 있다.
+코드를 새로 설계하지 말고 **이 파일들이 이미 쓰는 방식을 그대로 이어 간다.** 방식의 내용은 4절에 있다.
 
-두 파일은 사용자의 집 PC에서 만들고 검증한 것이다. 업무 PC는 환경이 다를 수 있다.
+이 파일들은 사용자의 집 PC에서 만들고 검증한 것이다. 업무 PC는 환경이 다를 수 있다.
 그래서 고치기 전에 3절의 순서로 "그대로 돌아가는지"부터 확인한다.
 
 ---
 
-## 3. 두 파일과 처음에 확인할 것
+## 3. 파일과 처음에 확인할 것
 
 ### 파일 설명
 
 | 파일 | 내용 |
 | --- | --- |
 | `rapid_style.py` | RAPID 방식의 데이터·명령·실행기. numpy와 scipy만 쓴다. Isaac Sim 없이 단독 시험이 된다 |
-| `factory_line_demo.py` | RAPID 전용 Isaac Sim 6.2 standalone 예시. 창고에 컨베이어 라인을 만들고 로봇 4대(KUKA KR210, Kawasaki RS080N, Unitree H1, Ridgeback+Franka)를 움직인다 |
+| `factory_line_demo.py` | Isaac Sim 6.2 standalone 예시이자 ROS 2 노드 `/isaac_sim`. 창고에 컨베이어 라인을 만들고 로봇 4대(KUKA KR210, Kawasaki RS080N, Unitree H1, Ridgeback+Franka)를 지령 topic대로 움직인다 |
+| `rapid_controller.py` | ROS 2 노드 `/rapid_controller`. 네 로봇의 RAPID 스타일 프로그램과 목표 좌표. 시뮬레이터가 자식 프로세스로 띄운다 |
+| `line_common.py` | 두 노드가 같이 쓰는 라인 배치 숫자, tooldata, ROS 2 설정(RMW = FastDDS), 메시지 변환 |
 
-- 두 파일은 같은 폴더에 있어야 한다. `factory_line_demo.py`가 `rapid_style`을 import한다.
+- 네 파일은 같은 폴더에 있어야 한다. 두 노드가 `line_common`과 `rapid_style`을 import한다.
+- ROS 2는 따로 설치하지 않는다. Isaac Sim 안의 ROS 2 Jazzy(`exts/isaacsim.ros2.core/jazzy`)를 쓴다. 구조 설명은 README의 "ROS 2 구조"에 있다.
 - 현재 전달할 버전은 저장소 HEAD다. `b82bdb4`는 시간표 코드가 포함된 과거 버전이므로 기준으로 되돌리지 않는다.
-- 설명은 파일 안 주석에 자세히 있다. **이 문서를 읽은 다음 두 파일을 처음부터 끝까지 읽는다.**
+- 설명은 파일 안 주석에 자세히 있다. **이 문서를 읽은 다음 네 파일을 처음부터 끝까지 읽는다.**
   특히 `rapid_style.py` 맨 위 설명(RAPID 대응표, ABB와 다른 점)과 `factory_line_demo.py`의 구역 머리말을 본다.
 
 `factory_line_demo.py`의 구역 순서는 아래와 같다.
 
-1. 라인 배치 (상수)
-2. RAPID 프로그램과 박스 신호 처리
-3. IK·보행 제어
+1. 시뮬레이터 쪽 상수
+2. 셀 상태와 센서(박스 신호 처리)
+3. IK 제어
 4. 장면 구성
 5. 로봇을 제어 대상으로 잡기
-6. RAPID 방식의 목표·공구 등록
-7. 실행 상태·클릭 티칭·물리 콜백
+6. 좌표 찍기 도구
+7. 실행 상태·ROS 2 노드·클릭 티칭·물리 콜백
 8. 메인 루프
 9. 자체 점검
 10. 종료
+
+RAPID 프로그램과 목표·공구 등록은 `rapid_controller.py`에 있다.
 
 ### 확인 순서
 
@@ -74,7 +79,7 @@
    <Isaac Sim 폴더>\python.bat factory_line_demo.py --headless --seconds 40
    ```
 
-4. **박스 신호 회귀 시험.** 3개 시험이 통과해야 한다.
+4. **단위 시험.** 박스 신호 3개와 컨트롤러 노드 3개, 모두 6개가 통과해야 한다.
 
    ```bash
    <Isaac Sim 폴더>\python.bat -m unittest discover -s tests -v
@@ -132,9 +137,10 @@ def pick_program():
 
 사용자는 RobotStudio처럼 물체에 스냅을 걸고 클릭해 타깃을 등록하는 방식을 원한다. 숫자를 실측해 대신 적어 주지 않는다.
 
-1. 실행 중에 물체를 클릭하면 터미널에 `[TEACH] robtarget(...)` 한 줄이 찍힌다. 그 줄을 코드에 붙인다.
-2. 코드에서는 `snap_top("/World/물체경로")`로 물체 윗면 가운데를 받는다.
-3. 물체가 아니라 라인에서 정한 위치일 때만 숫자를 직접 적는다.
+1. 실행 중에 물체를 클릭하면 터미널에 `[TEACH] robtarget(...)` 한 줄이 찍힌다. 그 줄을 `rapid_controller.py`에 붙인다.
+2. 물체가 아니라 라인에서 정한 위치일 때만 숫자를 직접 적는다.
+
+컨트롤러 노드는 장면을 볼 수 없으므로 `snap_top()`은 시뮬레이터 쪽에만 있다.
 
 찍히는 점은 바운딩 박스의 윗면 중심 하나뿐이다. 다른 스냅이 필요하면 먼저 사용자와 방법을 정한다.
 

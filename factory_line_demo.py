@@ -1,26 +1,38 @@
 # 산업용 로봇 2대·휴머노이드·AMMR이 한 라인에서 움직이는 Isaac Sim 6.2 공장 자동화 모션 예시
-r"""실행: C:\isaacsim-6.2\python.bat factory_line_demo.py [--headless] [--seconds 40]
+r"""실행: C:\isaacsim-6.2\python.bat factory_line_demo.py [--headless] [--seconds 40] [--no-controller]
 
 - 산업용 로봇 A (KUKA KR210)       컨베이어 위를 지나가는 박스를 따라가며 검사하는 동작
 - 산업용 로봇 B (Kawasaki RS080N)  컨베이어 끝에서 박스를 들어 팔레트에 내려놓는 동작
 - 휴머노이드 (Unitree H1)          라인 옆 통로를 순찰 보행 (Isaac Sim 내장 보행 정책)
 - AMMR (Ridgeback + Franka)        팔레트와 출하 버퍼 사이를 왕복하며 팔을 뻗는 동작
 
-ROS 2는 쓰지 않는다. 박스는 물리 없는 시각용 큐브이고 그리퍼 위치를 따라다닐 뿐이다.
+ROS 2 노드 두 개로 나뉘어 있다. 이 파일은 그중 Isaac Sim 노드(/isaac_sim)다.
 
-네 로봇은 RAPID 스타일 프로그램으로만 움직인다.
-scan_program, palletize_program, ammr_program, patrol_program에서 명령 순서를 수정한다.
+    /isaac_sim (이 파일)          로봇 본체와 저수준 제어. 관절 구동기, 미분 IK, H1 보행 정책, 박스와 센서
+    /rapid_controller             RAPID 스타일 프로그램 4개 (rapid_controller.py). 별도 프로세스다
 
-이 파일이 SimulationApp을 생성하므로 Isaac Sim을 별도로 열 필요가 없다.
-기본 실행의 제어 흐름은 다음과 같다. 명령은 설명용 예시가 아니라 매 물리 스텝의 구동에 쓰인다.
-    *_program()의 yield 명령 → RapidTask.step()의 지령 → on_physics_step()의 제어 → Isaac Sim 관절 구동기
-팔 두 대는 IK로, AMMR은 관절 목표로, H1은 보행 정책으로 같은 RAPID 스타일 명령을 실행한다.
+두 노드는 서로의 코드를 부르지 않는다. topic과 service로만 대화한다 (목록은 rapid_controller.py 맨 위).
+이 파일은 RAPID 프로그램을 모른다. 지령 topic이 오면 그대로 로봇에 적용하고, 로봇 상태와 센서 값을 topic으로 내보낸다.
+기본 실행은 rapid_controller.py를 자식 프로세스로 같이 띄운다. --no-controller면 띄우지 않고 기다린다.
+
+제어 흐름 (물리 0.005초마다).
+    이 파일: 로봇 상태·센서 발행 → /clock 발행
+    rapid_controller.py: /clock 수신 → RapidTask.step() → 지령 발행
+    이 파일: 지령 수신 → IK·관절 목표·보행 정책 → Isaac Sim 관절 구동기
+박스는 물리 없는 시각용 큐브이고 그리퍼 위치를 따라다닐 뿐이다.
 
 실행 중에 물체를 클릭하면 그 물체 윗면 가운데 좌표가 robtarget 한 줄로 출력된다 (on_stage_event 참고).
 """
 
 import argparse
+import atexit
 import os
+import subprocess
+import sys
+
+# ROS 2 통신 구현(RMW)을 FastDDS로 정한다. Isaac Sim의 ROS 2 브리지가 시작할 때 이 값을 읽으므로 SimulationApp보다 먼저 정한다.
+# python.bat의 기본값은 Zenoh인데, Zenoh는 라우터를 따로 띄워야 프로세스끼리 찾는다. 컨트롤러도 같은 값을 쓴다 (line_common.RMW).
+os.environ["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp"
 
 # 이 스크립트의 수치 계산은 6x6 이하의 작은 행렬뿐이다. numpy·scipy·torch가 계산용 스레드를 여러 개 띄우면
 # 도움은 안 되고 물리·화면 스레드와 CPU를 다투기만 한다. Isaac Sim을 띄우기 전에 1개로 묶는다.
@@ -35,9 +47,12 @@ parser.add_argument("--headless", action="store_true", help="창 없이 실행")
 parser.add_argument(
     "--seconds", type=float, default=0.0, help="이 시간(시뮬레이션 초)만 돌리고 자체 점검 후 종료. 0이면 창을 닫을 때까지 실행"
 )
+parser.add_argument(
+    "--no-controller", action="store_true", help="rapid_controller.py를 띄우지 않는다. 다른 터미널에서 직접 실행할 때 쓴다"
+)
 args = parser.parse_args()
 # 별도 Isaac Sim 프로세스에 명령을 보내는 구조가 아니다. 이 Python 실행 안에서 앱과 물리 엔진을 시작한다.
-print("[MOTION] rapid | RAPID programs -> robot drives", flush=True)
+print("[MOTION] ros2 | /rapid_controller (RAPID programs) -> topics -> /isaac_sim (robot drives)", flush=True)
 simulation_app = SimulationApp({"headless": args.headless})
 
 import math
@@ -45,6 +60,7 @@ import time
 import traceback
 
 import carb
+import isaacsim.core.experimental.utils.app as app_utils
 import isaacsim.core.experimental.utils.stage as stage_utils
 import numpy as np
 import omni.timeline
@@ -58,62 +74,55 @@ from isaacsim.storage.native import get_assets_root_path
 from omni.kit.viewport.utility import capture_viewport_to_file, get_active_viewport
 import omni.usd
 from pxr import Usd, UsdGeom
-from rapid_style import (
-    MoveAbsJ,
-    MoveBase,
-    MoveL,
-    Offs,
-    RapidTask,
-    SetDO,
-    WaitTime,
-    WaitUntil,
-    basetarget,
-    fine,
-    jointtarget,
-    robtarget,
-    tooldata,
-    v500,
-    v1000,
-    v1500,
-    z50,
-    z500,
-)
+from rapid_style import robtarget
 from scipy.spatial.transform import Rotation
 
-# ------------------------------------------------------------------ 라인 배치
-# 주석 맨 앞 대괄호가 그 값의 단위다. [m] 미터, [s] 초, [m/s] 초당 미터, [rad] 라디안(180도 = 3.1416 rad).
-# 좌표는 월드 기준이다. x·y가 바닥 평면이고 z가 위쪽이다.
-TAKT = 8.0  # [s] 택트 타임. 박스 1개가 나오는 간격
-BELT_V = 0.225  # [m/s] 컨베이어 위에서 박스가 움직이는 속도
-BELT_Z = 0.77  # [m] 바닥에서 컨베이어 롤러 윗면까지 높이 (ConveyorBelt_A05 실측)
-BOX = 0.35  # [m] 박스 한 변의 길이 (정육면체)
-X_IN, X_OUT = -3.7, 1.7  # [m] 박스가 벨트에 올라오는 x, 집히는 x. 둘 사이 거리 = 3 * TAKT * BELT_V
-GAP = 0.02  # [m] 그리퍼 끝과 박스 윗면 사이 틈
-PALLET_TOP = 0.143  # [m] 바닥에서 팔레트 윗면까지 높이 (pallet.usd 실측)
-PALLET_OUT = (3.2, -1.5)  # [m] (x, y) 로봇 B가 박스를 쌓는 팔레트의 중심
-PALLET_BUF = (-3.0, -1.5)  # [m] (x, y) AMMR이 다녀오는 출하 버퍼 팔레트의 중심
-AMMR_HOME = (PALLET_OUT[0], -3.0)  # [m] (x, y) AMMR을 처음 놓는 위치. 적재 팔레트 앞 통로다
-SLOT_X = (-0.4, 0.0, 0.4)  # [m] 팔레트 중심에서 박스 3칸 각각까지의 x 거리
+# ROS 2 브리지 확장을 켠다. Isaac Sim에 들어 있는 ROS 2 Jazzy 라이브러리를 불러오는 단계다.
+# 이 줄 뒤에야 rclpy(ROS 2 파이썬 라이브러리)를 import할 수 있다. 시스템에 ROS 2를 따로 설치할 필요는 없다.
+app_utils.enable_extension("isaacsim.ros2.bridge")
+simulation_app.update()
+
+import rclpy  # noqa: E402
+from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped  # noqa: E402
+from line_common import (  # noqa: E402
+    AMMR_HOME,
+    BELT_V,
+    BELT_Z,
+    BOX,
+    PALLET_BUF,
+    PALLET_OUT,
+    PALLET_TOP,
+    SCAN_LEN,
+    SCAN_START,
+    SLOT_X,
+    TAKT,
+    TOOLS,
+    TUCK,
+    X_IN,
+    X_OUT,
+    from_transform,
+    seconds,
+    stamp,
+    to_transform,
+)
+from rosgraph_msgs.msg import Clock  # noqa: E402
+from sensor_msgs.msg import JointState  # noqa: E402
+from std_msgs.msg import Bool  # noqa: E402
+from std_srvs.srv import SetBool  # noqa: E402
+
+# ------------------------------------------------------------------ 시뮬레이터 쪽 상수
+# 라인 배치(벨트·팔레트·박스 크기)와 tooldata는 컨트롤러와 같이 쓰므로 line_common.py에 있다.
+# 여기에는 로봇을 장면에 놓고 처음 세우는 데만 쓰는 값을 둔다.
 START_T = -2.0  # [s] 시작 시각. 첫 박스가 집히기 2초 전 상태에서 시작한다
 DOWN = np.array([0.0, 0.0, -1.0])  # [단위 없음] (x, y, z) 아래를 가리키는 길이 1짜리 방향 벡터
-
 KUKA_HOME = [0.0, 0.0, 0.3, 0.0, 1.27, 0.0]  # [rad] 관절 a1~a6의 시작 자세. 공구가 아래를 본다
 KAWASAKI_HOME = [0.0, 0.2, -1.5, 0.0, -1.44, 0.0] + [0.0] * 6  # [rad] 관절 j1~j6의 시작 자세 + 그리퍼 관절 6개
-TUCK = [0.0, -1.0, 0.0, -2.4, 0.0, 1.6, 0.785]  # [rad] AMMR 팔 7축. 접은 자세
-REACH = [0.0, 0.75, 0.0, -1.3, 0.0, 2.05, 0.785]  # [rad] AMMR 팔 7축. 앞으로 뻗은 자세
 H = math.pi / 2  # [rad] 90도. 방향을 적을 때 쓰는 줄임말
-H1_WAYPOINTS = [(4.0, 4.4), (4.0, 6.0), (-4.0, 6.0), (-4.0, 4.4)]  # [m] (x, y) 순찰 지점 4곳. 반시계 순서로 돈다
 
 
-# ------------------------------------------------------------------ RAPID 프로그램 작성부
-# 네 로봇의 동작은 아래 프로그램에서 목표(target)·속도(speed)·zone·tool과 명령 순서로 정의한다.
-# 명령의 뜻과 ABB와 다른 점은 rapid_style.py 맨 위에 적혀 있다.
-# 프로그램이 쓰는 목표(pPick, bOut 등)와 공구(tGripper 등)는 장면을 다 읽은 뒤에 등록한다.
-# 아래쪽 "RAPID 방식의 목표·공구 등록" 구역에 있다.
-# 동작을 바꾸려면 이 구역의 *_program()을 수정한다.
-# 프로그램 작성자는 MoveL 등의 명령으로 순서를 적는다. 관절 계산과 물리 스텝 호출은 아래 실행부가 담당한다.
-
-io = {"doGrip": 0}  # 출력 신호. doGrip이 1이면 그리퍼가 쥔 상태다
+# ------------------------------------------------------------------ 셀 상태와 센서
+# 박스와 센서는 "공장 바닥"에 있는 것이라 시뮬레이터가 계산한다. 컨트롤러는 센서 값을 topic으로만 받는다.
+io = {"doGrip": 0}  # 그리퍼 출력 신호. 컨트롤러가 /kawasaki/set_do_grip service로 바꾼다. 1이면 쥔 상태다
 cell = {"held": None, "placed": {}, "log": []}  # held는 쥐고 있는 박스 번호, placed는 {박스 번호: 놓인 [m] 좌표}
 
 
@@ -128,128 +137,17 @@ def waiting_box(t):
 
 
 def box_at_pick():
-    """벨트 끝에 박스가 와 있으면 True. RAPID의 디지털 입력 diBoxAtPick에 해당한다."""
+    """벨트 끝에 박스가 와 있으면 True. 근접 센서 하나다. 매 스텝 /cell/di_box_at_pick topic으로 내보낸다."""
     return waiting_box(state["t"]) is not None
 
 
 def box_at_scan():
-    """벨트 위 박스가 검사 시작 위치(pScanStart)를 막 지났으면 True. RAPID의 디지털 입력에 해당한다."""
+    """벨트 위 박스가 검사 시작 위치(SCAN_START)를 막 지났으면 True. 매 스텝 /cell/di_box_at_scan으로 내보낸다."""
     for b in range(6):
         u = (state["t"] - b * TAKT) % (6 * TAKT)
-        if u >= 3 * TAKT and 0.0 <= X_IN + BELT_V * (u - 3 * TAKT) - pScanStart["pos"][0] < 0.05:
+        if u >= 3 * TAKT and 0.0 <= X_IN + BELT_V * (u - 3 * TAKT) - SCAN_START[0] < 0.05:
             return True
     return False
-
-
-# --- yield가 낯설다면
-# 보통 함수는 return을 만나면 끝난다. yield가 들어 있는 함수는 다르다. yield를 만나면 그 값(명령 하나)을
-# 내놓고 "그 자리에서 멈춰 기다린다". 다음에 다시 부르면 멈췄던 바로 다음 줄부터 이어서 실행한다.
-# 그래서 아래 프로그램은 "명령을 한 줄씩 내놓는 목록"처럼 동작한다. 실행기 RapidTask가 명령 하나를 받아
-# 로봇이 그 동작을 끝낼 때까지 여러 물리 스텝에 걸쳐 실행하고, 끝나면 다음 명령을 달라고 한다.
-# RAPID에서 MoveL 한 줄이 끝나야 프로그램 포인터(PP)가 다음 줄로 넘어가는 것과 같다.
-# while True 안에 있으므로 마지막 줄까지 가면 처음으로 돌아가 끝없이 되풀이한다 (WHILE TRUE DO ... ENDWHILE).
-def palletize_program():
-    """Kawasaki 적재 프로그램. 같은 내용을 RAPID로 쓰면 아래와 같다 (단위만 mm에서 m로 다르다).
-
-        PROC Palletize()
-          WHILE TRUE DO
-            pPlace := Offs(pPallet, slotX{nSlot}, 0, 0);
-            MoveL Offs(pPick, 0, 0, 450), v1500, z50, tGripper;
-            MoveL pPick, v1000, fine, tGripper;
-            WaitUntil diBoxAtPick = 1;
-            SetDO doGrip, 1;
-            WaitTime 0.3;
-            MoveL Offs(pPick, 0, 0, 450), v1000, z50, tGripper;
-            MoveL Offs(pPlace, 0, 0, 600), v1500, z50, tGripper;
-            MoveL pPlace, v1000, fine, tGripper;
-            SetDO doGrip, 0;
-            WaitTime 0.3;
-            MoveL Offs(pPlace, 0, 0, 600), v1000, z50, tGripper;
-            nSlot := (nSlot + 1) MOD 3;
-          ENDWHILE
-        ENDPROC
-
-    yield 한 줄이 RAPID 명령 한 줄이다. 이동 시작 시각을 따로 적지 않는다. 걸리는 시간은 거리와 속도로 정해지고,
-    박스가 오는 시각과는 WaitUntil로 맞춘다.
-
-    이 함수 안의 PROC 예문은 설명이고, 아래의 실제 Python yield 문들이 로봇을 제어한다.
-    예를 들어 MoveL의 pPick을 바꾸면 RapidTask의 직선 경로가 바뀌고, IK가 그 경로를 관절 목표로 바꾼다.
-    fine에서 현재 TCP 위치가 목표의 5 mm 안에 들어온 뒤에만 다음 줄로 넘어간다.
-    SetDO는 io 딕셔너리를 바꾸며 frame()의 box_positions_rapid가 그 값으로 박스를 붙이거나 놓는다.
-    따라서 여기서 '쥔다'는 시각용 박스 연결이며 RG2 손가락의 물리 접촉 파지 명령은 아니다.
-    """
-    slot = 0  # 이번에 놓을 팔레트 칸 번호 (0, 1, 2)
-    while True:
-        pPlace = Offs(pPallet, SLOT_X[slot], 0.0, 0.0)  # 가운데 칸에서 x로 옮긴 이번 칸
-        yield MoveL(Offs(pPick, 0.0, 0.0, 0.45), v1500, z50, tGripper)  # 집는 점 45 cm 위로 간다 (멈추지 않고 지나감)
-        yield MoveL(pPick, v1000, fine, tGripper)  # 집는 점으로 내려가 정확히 선다
-        yield WaitUntil(box_at_pick)  # 박스가 벨트 끝에 올 때까지 기다린다
-        yield SetDO("doGrip", 1)  # 쥔다
-        yield WaitTime(0.3)  # 쥐는 시간
-        yield MoveL(Offs(pPick, 0.0, 0.0, 0.45), v1000, z50, tGripper)  # 들어 올린다
-        yield MoveL(Offs(pPlace, 0.0, 0.0, 0.60), v1500, z50, tGripper)  # 놓을 칸 60 cm 위로 옮긴다
-        yield MoveL(pPlace, v1000, fine, tGripper)  # 놓을 칸으로 내려가 정확히 선다
-        yield SetDO("doGrip", 0)  # 놓는다
-        yield WaitTime(0.3)  # 놓는 시간
-        yield MoveL(Offs(pPlace, 0.0, 0.0, 0.60), v1000, z50, tGripper)  # 빈손으로 올린다
-        slot = (slot + 1) % 3  # 다음 칸
-
-
-def scan_program():
-    """KUKA 검사 프로그램. 지나가는 박스 위 10 cm에서 박스와 나란히 이동한 뒤 돌아온다.
-
-        PROC Scan()
-          WHILE TRUE DO
-            MoveL Offs(pScanStart, 0, 0, 400), v1000, z50, tScanner;
-            MoveL pScanStart, v1000, fine, tScanner;
-            WaitUntil diBoxAtScan = 1;
-            MoveL pScanEnd, vBelt, fine, tScanner;
-            MoveL Offs(pScanEnd, 0, 0, 400), v1000, z50, tScanner;
-          ENDWHILE
-        ENDPROC
-
-    컨베이어 트래킹은 아니다. 박스가 시작 위치에 온 것을 신호로 받아 벨트와 같은 속도(vBelt)로 직선 이동할 뿐이다.
-    """
-    vBelt = BELT_V  # [m/s] 벨트와 같은 속도. speeddata를 직접 만든 것이다
-    while True:
-        yield MoveL(Offs(pScanStart, 0.0, 0.0, 0.40), v1000, z50, tScanner)  # 시작 위치 40 cm 위로 돌아온다
-        yield MoveL(pScanStart, v1000, fine, tScanner)  # 박스가 지나갈 높이로 내려가 정확히 선다
-        yield WaitUntil(box_at_scan)  # 박스가 바로 아래에 올 때까지 기다린다
-        yield MoveL(pScanEnd, vBelt, fine, tScanner)  # 박스와 같은 속도로 나란히 간다
-        yield MoveL(Offs(pScanEnd, 0.0, 0.0, 0.40), v1000, z50, tScanner)  # 올라간다
-
-
-def ammr_program():
-    """AMMR 프로그램. 적재 팔레트와 출하 버퍼 사이를 오가며 도착할 때마다 팔을 뻗었다 접는다.
-
-    MoveBase가 몸체(바퀴 베이스)를, MoveAbsJ가 그 위의 팔 7축을 움직인다. 모두 fine이라 실제로 도착한 뒤에
-    다음 줄로 넘어간다. MoveBase는 RAPID에 없는 명령이지만 모양은 MoveL과 같다 (목표, 속도, zone).
-    제자리 회전은 x, y가 같고 rz만 다른 목표를 주면 된다.
-    """
-    while True:
-        yield MoveBase(bOut, v500, fine)  # 적재 팔레트 앞에서 팔레트 쪽(+y)을 보고 선다
-        yield MoveAbsJ(jReach, 45.0, fine)  # 팔을 앞으로 뻗는다. 45는 [deg/s]
-        yield WaitTime(1.0)
-        yield MoveAbsJ(jTuck, 45.0, fine)  # 팔을 접는다
-        yield MoveBase(basetarget(AMMR_HOME[0], AMMR_HOME[1], 180.0), v500, fine)  # 제자리에서 갈 방향(-x)으로 돈다
-        yield MoveBase(basetarget(PALLET_BUF[0], AMMR_HOME[1], 180.0), v500, fine)  # 버퍼 앞까지 직진한다
-        yield MoveBase(bBuf, v500, fine)  # 버퍼 팔레트 쪽(+y)을 보고 선다
-        yield MoveAbsJ(jReach, 45.0, fine)
-        yield WaitTime(1.0)
-        yield MoveAbsJ(jTuck, 45.0, fine)
-        yield MoveBase(basetarget(PALLET_BUF[0], AMMR_HOME[1], 0.0), v500, fine)  # 제자리에서 갈 방향(+x)으로 돈다
-        yield MoveBase(basetarget(AMMR_HOME[0], AMMR_HOME[1], 0.0), v500, fine)  # 적재 팔레트 앞까지 직진한다
-
-
-def patrol_program():
-    """H1 순찰 프로그램. 순찰 지점 네 곳을 차례로 걸어서 돈다.
-
-    H1은 걷는 로봇이라 MoveBase의 뜻이 조금 다르다. 목표 쪽으로 몸을 돌려 걸어가고, 도착 방향 rz는 맞추지 않는다.
-    z500이라 지점 0.5 m 안에 들어오면 멈추지 않고 다음 지점으로 향한다. 속도는 정책이 학습된 0 ~ 1 m/s 안에서 준다.
-    """
-    while True:
-        for x, y in H1_WAYPOINTS:
-            yield MoveBase(basetarget(x, y, 0.0), v500, z500)
 
 
 def box_positions_rapid(t, tcp_pos):
@@ -332,18 +230,6 @@ def h1_pose():
     pos, quat = h1.articulation.get_world_poses()
     (x, y, _), (qw, qx, qy, qz) = pos.numpy()[0], quat.numpy()[0]
     return x, y, math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
-
-
-def walk_command(pose, goal, speed=0.5):
-    """H1을 [m] goal (x, y)로 보내는 [전진 속도, 횡 속도, 회전 속도] 명령. goal이 None이면 제자리에 선다.
-
-    목표 방향과 몸 방향의 차이가 0.6 rad 미만이면 [m/s] speed로 걷고, 크면 제자리에서 돈다.
-    """
-    if goal is None:
-        return np.zeros(3, dtype=np.float32)
-    x, y, yaw = pose
-    turn = (math.atan2(goal[1] - y, goal[0] - x) - yaw + math.pi) % (2 * math.pi) - math.pi
-    return np.array([speed if abs(turn) < 0.6 else 0.0, 0.0, np.clip(1.5 * turn, -0.7, 0.7)], dtype=np.float32)
 
 
 # ------------------------------------------------------------------ 장면 구성
@@ -456,6 +342,7 @@ def make_arm(prim_path, ee_link, home):
     return {
         "robot": robot,
         "ee": RigidPrim(f"{prim_path}/{ee_link}"),
+        "ee_link": ee_link,  # /kuka/flange_pose 같은 메시지의 child_frame_id에 이 이름을 적는다
         "row": robot.get_link_indices(ee_link).list()[0] - 1,  # 고정 베이스라 자코비안에 루트 링크가 없다
         "home": np.array(home[:6], dtype=float),
         "q_cmd": np.array(home[:6], dtype=float),  # 적분 중인 관절 지령
@@ -470,7 +357,7 @@ def make_arm(prim_path, ee_link, home):
 #   경로        add()에서 붙인 이름.
 #   손끝 링크    robot.link_names를 출력해 공구가 달린 링크 이름을 고른다.
 #   시작 자세    [rad] 관절 한계 안에서 팔꿈치가 굽은 자세로 정한다. 팔이 곧게 펴진 자세는 IK가 불안정하다.
-kuka = make_arm("/World/Kuka", "tool0", KUKA_HOME)  # 손끝은 tool0 링크. 공구 축은 tScanner에서 정의한다.
+kuka = make_arm("/World/Kuka", "tool0", KUKA_HOME)  # 손끝은 tool0 링크. 공구 축은 line_common.TOOLS의 tScanner에서 정의한다.
 kawasaki = make_arm("/World/Kawasaki", "gripper_center", KAWASAKI_HOME)  # 그리퍼 중심 링크. 공구 축은 tGripper에서 정의한다.
 # AMMR은 MoveBase·MoveAbsJ가 관절 목표를 직접 만들므로 Articulation만 만든다.
 ammr = Articulation("/World/AMMR")
@@ -494,12 +381,12 @@ while stage_utils.is_stage_loading():
 # 시작 화면의 카메라를 정한다. eye는 [m] 카메라가 있는 곳, target은 [m] 카메라가 바라보는 점이다.
 ViewportManager.set_camera_view("/OmniverseKit_Persp", eye=[8.5, -8.0, 6.0], target=[0.0, 0.5, 0.8])
 
-# ------------------------------------------------------------------ RAPID 방식의 목표·공구 등록
-# RobotStudio에서는 물체 윗면에 스냅을 걸고 클릭해서 타깃을 찍는다. 여기서 같은 일을 하는 방법은 세 가지다.
-#   1. snap_top("/World/물체경로")     코드에서 물체 윗면 가운데를 바로 robtarget으로 받는다. 아래 pPallet이 그 예다.
-#   2. 실행 중에 물체를 클릭한다        터미널에 "[TEACH] robtarget(...)" 한 줄이 찍힌다. 그 줄을 복사해 여기에 붙인다.
-#                                      찍힌 자리에는 빨간 표시가 생긴다. 아래 on_stage_event가 이 일을 한다.
-#   3. 숫자를 직접 적는다               벨트 끝처럼 물체가 아니라 "라인에서 정한 위치"일 때 쓴다. 아래 pPick이 그 예다.
+# ------------------------------------------------------------------ 좌표 찍기 도구
+# RobotStudio에서는 물체 윗면에 스냅을 걸고 클릭해서 타깃을 찍는다. 이 예시에서 같은 일을 하는 방법은 두 가지다.
+#   1. 실행 중에 물체를 클릭한다        터미널에 "[TEACH] robtarget(...)" 한 줄이 찍힌다. 그 줄을 복사해
+#                                      rapid_controller.py의 목표 등록부에 붙인다. pPalletTop이 그 예다.
+#   2. 숫자를 직접 적는다               벨트 끝처럼 물체가 아니라 "라인에서 정한 위치"일 때 쓴다. pPick이 그 예다.
+# 목표는 컨트롤러 파일에 있다. 컨트롤러는 장면을 볼 수 없으므로, 장면에서 좌표를 읽는 snap_top은 이 파일에만 있다.
 stage = stage_utils.get_current_stage()
 
 
@@ -521,32 +408,81 @@ def snap_top(prim_path, rx=180.0, ry=0.0, rz=0.0):
     return robtarget((low[0] + high[0]) / 2, (low[1] + high[1]) / 2, high[2], rx, ry, rz)
 
 
-# tooldata. 손끝 링크에서 본 TCP의 [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. TCP의 Z축이 공구가 뻗는 방향이다.
-# Kawasaki. 손끝 링크(gripper_center)의 +Z가 공구 방향이라 회전은 0이다. 그 방향으로 GAP만큼 나간 점을 TCP로 잡았다.
-# 그래서 목표 좌표에 "박스 윗면"을 그대로 적으면 된다.
-tGripper = tooldata(0.0, 0.0, GAP, 0.0, 0.0, 0.0)
-# KUKA. 손끝 링크(tool0)는 +X가 공구 방향이다. y축으로 90도 돌려 TCP의 Z축을 그 방향에 맞춘다.
-tScanner = tooldata(0.0, 0.0, 0.0, 0.0, 90.0, 0.0)
-
-# robtarget. [m] 위치 (x, y, z)와 [deg] 방향 (rx, ry, rz)이다. rx = 180은 공구가 바닥을 보는 자세다.
-pPallet = Offs(snap_top("/World/PalletOut"), 0.0, 0.0, BOX)  # 팔레트 윗면 가운데를 스냅으로 찍고, 박스 한 개 높이만큼 올린 점
-pPick = robtarget(X_OUT, 0.0, BELT_Z + BOX, 180.0, 0.0, 0.0)  # 벨트 끝에 온 박스의 윗면. 박스가 서는 위치는 라인에서 정한 값이다
-pScanStart = robtarget(-1.45, 0.0, BELT_Z + BOX + 0.10, 180.0, 0.0, 0.0)  # 검사를 시작하는 점. 박스 윗면에서 10 cm 위
-pScanEnd = Offs(pScanStart, 0.90, 0.0, 0.0)  # 검사를 끝내는 점. 벨트 방향으로 0.9 m 간 곳
-
-# jointtarget. [deg] AMMR 팔 7축의 각도다. 시작 자세와 같은 단위인 TUCK, REACH([rad])를 변환한다.
-jTuck = jointtarget(*np.degrees(TUCK))  # (0, -57.3, 0, -137.5, 0, 91.7, 45.0) 접은 자세
-jReach = jointtarget(*np.degrees(REACH))  # (0, 43.0, 0, -74.5, 0, 117.5, 45.0) 앞으로 뻗은 자세
-
-# basetarget. [m] 몸체 위치 (x, y)와 [deg] 바라보는 방향 rz다 (0이 +x, 90이 +y).
-bOut = basetarget(AMMR_HOME[0], AMMR_HOME[1], 90.0)  # 적재 팔레트 앞. 팔레트를 본다
-bBuf = basetarget(PALLET_BUF[0], AMMR_HOME[1], 90.0)  # 출하 버퍼 팔레트 앞. 버퍼를 본다
-
 # ------------------------------------------------------------------ 실행
 # 실행 중에 바뀌는 값들. t는 [s] 시뮬레이션 시각, first는 "재생 후 첫 스텝인가", error는 물리 콜백 오류다.
-# tasks는 RAPID 방식일 때 로봇마다의 프로그램을 실행하는 RapidTask들이다. ammr_x는 방금 AMMR에 보낸 [m] 베이스 x 목표,
-# boxes는 방금 계산한 박스 6개의 [m] 좌표, taught는 마지막으로 클릭해서 찍은 (물체 경로, [m] 좌표)다.
-state = {"t": START_T, "first": True, "error": None, "tasks": None, "ammr_x": 0.0, "boxes": None, "taught": None}
+# ammr_x는 방금 AMMR에 보낸 [m] 베이스 x 목표, boxes는 방금 계산한 박스 6개의 [m] 좌표,
+# taught는 마지막으로 클릭해서 찍은 (물체 경로, [m] 좌표)다. ages는 [s] 적용한 팔 지령이 만들어진 뒤 흐른 시간들이다.
+state = {"t": START_T, "first": True, "error": None, "ammr_x": 0.0, "boxes": None, "taught": None, "ages": [], "received": 0}
+
+# ------------------------------------------------------------------ ROS 2 노드 (/isaac_sim)
+# 이 프로세스도 ROS 2 노드 하나가 된다. 노드는 "ROS 2 네트워크에 이름을 걸고 참여한 프로그램 하나"다.
+# 여기서 만드는 것은 세 종류다.
+#   발행(publisher)    로봇 상태와 센서 값을 매 물리 스텝 내보낸다. 받는 쪽이 누구인지는 모른다
+#   구독(subscription) 컨트롤러가 보낸 지령을 받는다. 받은 지령은 cmd에 저장해 두고 물리 콜백이 꺼내 쓴다
+#   서비스(service)    SetDO doGrip 요청을 받아 그리퍼 신호를 바꾸고 응답한다
+# topic 이름과 메시지 타입은 rapid_controller.py 맨 위 목록과 같아야 한다. 하나라도 다르면 연결되지 않는다.
+# 내 로봇을 추가하면 그 로봇의 상태 발행 하나와 지령 구독 하나를 같은 모양으로 추가한다.
+rclpy.init()
+ros = rclpy.create_node("isaac_sim")
+cmd = {}  # 마지막으로 받은 지령. 키는 로봇 이름 (kuka, kawasaki, ammr, h1)
+
+
+def keep(name):
+    """받은 메시지를 cmd[name]에 저장하는 콜백을 만든다. 구독 콜백은 저장만 하고, 적용은 물리 콜백이 한다."""
+    def store(msg):
+        cmd[name] = msg
+        state["received"] += 1  # 받기 반복이 "더 처리할 메시지가 없다"를 알아채는 데 쓴다
+
+    return store
+
+
+ros.create_subscription(TransformStamped, "/kuka/tcp_command", keep("kuka"), 10)
+ros.create_subscription(TransformStamped, "/kawasaki/tcp_command", keep("kawasaki"), 10)
+ros.create_subscription(JointState, "/ammr/joint_command", keep("ammr"), 10)
+ros.create_subscription(TwistStamped, "/h1/cmd_vel", keep("h1"), 10)
+
+
+def on_set_do_grip(request, response):
+    """SetDO doGrip 요청을 처리한다. request.data가 True면 쥔다. 처리 결과를 response에 담아 돌려준다."""
+    io["doGrip"] = int(request.data)
+    state["received"] += 1
+    response.success = True
+    return response
+
+
+ros.create_service(SetBool, "/kawasaki/set_do_grip", on_set_do_grip)
+pub = {
+    "clock": ros.create_publisher(Clock, "/clock", 10),
+    "kuka": ros.create_publisher(TransformStamped, "/kuka/flange_pose", 10),
+    "kawasaki": ros.create_publisher(TransformStamped, "/kawasaki/flange_pose", 10),
+    "ammr": ros.create_publisher(JointState, "/ammr/joint_states", 10),
+    "h1": ros.create_publisher(PoseStamped, "/h1/pose", 10),
+    "pick": ros.create_publisher(Bool, "/cell/di_box_at_pick", 10),
+    "scan": ros.create_publisher(Bool, "/cell/di_box_at_scan", 10),
+}
+# 실행기(executor)는 도착한 메시지를 확인해 위 콜백을 불러 주는 장치다. 물리 콜백 안에서 한 번씩 돌린다.
+executor = rclpy.executors.SingleThreadedExecutor()
+executor.add_node(ros)
+
+# 컨트롤러 노드를 별도 프로세스로 띄운다. 이 Python과 같은 실행 파일(sys.executable)과 같은 환경 변수를 쓴다.
+# 실제 공장이라면 다른 PC에서 도는 프로그램이다. 같은 PC의 다른 프로세스여도 ROS 2 입장에서는 차이가 없다.
+# --no-controller면 띄우지 않는다. 그때는 다른 터미널에서 python.bat rapid_controller.py를 직접 실행한다.
+here = os.path.dirname(os.path.abspath(__file__))
+controller = None
+if not args.no_controller:
+    controller = subprocess.Popen([sys.executable, os.path.join(here, "rapid_controller.py")], cwd=here)
+    print(f"[ROS2] started /rapid_controller (pid {controller.pid})", flush=True)
+    # 예외나 Ctrl+C로 끝나도 컨트롤러가 남지 않게 한다. Kit의 자동 종료보다 늦게 등록했으므로 먼저 실행된다.
+    atexit.register(controller.terminate)
+
+
+def fresh(msg):
+    """이번 실행에서 만들어진 지령이면 True.
+
+    정지 후 재생하면 시계가 0으로 돌아간다. 그보다 미래 시각이 찍힌 지령은 이전 실행에서 늦게 도착한 것이라 버린다.
+    """
+    return msg is not None and seconds(msg.header.stamp) <= state["t"] - START_T + 1e-6
+
 
 # ------------------------------------------------------------------ 클릭으로 좌표 찍기 (티칭)
 # 뷰포트나 Stage 창에서 물체를 클릭하면 그 물체 윗면 가운데 좌표가 robtarget 한 줄로 출력된다.
@@ -578,17 +514,21 @@ teach_subscription = omni.usd.get_context().get_stage_event_stream().create_subs
 
 
 def on_physics_step(dt, context):
-    """물리가 한 스텝(0.005 s) 진행될 때마다 Isaac Sim이 불러 주는 함수. 여기서 네 로봇의 목표를 갱신한다.
+    """물리가 한 스텝(0.005 s) 진행될 때마다 Isaac Sim이 불러 주는 함수. ROS 2로 상태를 내보내고 지령을 적용한다.
 
     dt는 [s] 방금 진행된 물리 한 스텝의 길이다. context는 Isaac Sim이 넘겨주는 값이고 여기서는 쓰지 않는다.
-    로봇이 실제로 움직이는 곳이 이 함수다. 내 로봇을 추가했다면 아래 "매 스텝" 부분에 그 로봇의 목표를
-    보내는 줄을 넣고, "첫 스텝" 부분에 시작 자세로 되돌리는 줄을 넣는다.
+    한 스텝에서 하는 일은 세 가지다.
+      1. 내보내기   로봇 상태·센서 값을 발행하고 마지막에 /clock을 발행한다. 컨트롤러는 /clock을 받으면 프로그램을 진행한다
+      2. 받기      그사이 도착한 지령 메시지를 실행기로 처리해 cmd에 저장한다
+      3. 적용      cmd의 지령을 IK·관절 목표·보행 정책으로 로봇에 적용한다
+    컨트롤러의 답은 보통 한두 스텝 뒤에 도착한다. 그동안은 직전 지령을 계속 적용한다.
+    내 로봇을 추가했다면 1에 상태 발행을, 3에 지령 적용을, "첫 스텝" 부분에 시작 자세로 되돌리는 줄을 넣는다.
     """
     if state["error"]:  # 앞에서 오류가 났으면 더 진행하지 않는다
         return
     try:
         # --- 첫 스텝. 재생 직후 한 번만 실행된다 (정지 후 다시 재생했을 때도 여기로 온다).
-        #     시계와 로봇 자세를 처음 상태로 맞추고 끝낸다.
+        #     시계와 로봇 자세를 처음 상태로 맞추고 끝낸다. 컨트롤러는 시계가 되돌아간 것을 보고 프로그램을 처음부터 다시 시작한다.
         if state["first"]:
             state.update(t=START_T, first=False)
             # 관절 구동기의 게인을 정한다. 앞이 강성 kp, 뒤가 감쇠 kd다. kp가 클수록 목표각으로 세게 당긴다.
@@ -597,16 +537,7 @@ def on_physics_step(dt, context):
             kuka["robot"].set_dof_gains(5.73e8, 5.73e6)
             for arm in (kuka, kawasaki):
                 arm["q_cmd"] = arm["home"].copy()  # IK가 적분해 가는 지령 관절각도 시작 자세로 되돌린다
-            # RAPID 방식의 프로그램·신호·박스 상태도 처음으로 되돌린다. 프로그램은 첫 줄부터 다시 시작한다.
-            # 로봇마다 태스크가 하나씩이다. H1은 걷는 로봇이라 walk=True로 만든다.
-            # scan_program()만 호출하면 제너레이터를 만들 뿐 로봇은 움직이지 않는다.
-            # 매 스텝의 step()이 yield 명령을 소비하고, 그 직후 아래 제어 API들이 지령을 로봇에 적용한다.
-            state["tasks"] = {
-                "kuka": RapidTask(scan_program(), io),
-                "kawasaki": RapidTask(palletize_program(), io),
-                "ammr": RapidTask(ammr_program(), io),
-                "h1": RapidTask(patrol_program(), io, walk=True),
-            }
+            cmd.clear()  # 이전 실행의 지령은 버린다. 새 지령이 올 때까지 로봇은 시작 자세를 유지한다
             io["doGrip"] = 0
             cell.update(held=None, placed={})
             for robot in (kuka["robot"], kawasaki["robot"], ammr):
@@ -614,35 +545,52 @@ def on_physics_step(dt, context):
             # H1을 기본 자세로 세우고 보행 정책을 초기화한다. 인자는 속도 명령 [전진, 횡, 회전]이고 처음에는 0이다.
             h1.restart_from_default_state(np.zeros(3, dtype=np.float32))
             return
-        # --- 매 스텝. 시계를 dt만큼 진행시키고, 그 시각에 맞는 목표를 로봇마다 보낸다.
         state["t"] += dt
         t = state["t"]
-        pose = h1_pose()  # H1의 지금 실제 자세 ([m] x, [m] y, [rad] 방향)
-        # --- RAPID 방식. 로봇마다 프로그램을 dt만큼 진행시키고, 프로그램이 내놓은 "지금 있어야 할 상태"로 보낸다.
-        tasks = state["tasks"]
-        # 팔 두 대. 프로그램이 지령 TCP 자세를 내놓고, IK가 TCP를 그 자세로 보낸다.
+        now = t - START_T  # [s] 재생을 시작한 뒤 흐른 시간. /clock과 메시지 시각에 쓴다 (ROS 시각은 0부터 센다)
+        # --- 1. 내보내기. 로봇의 지금 실제 상태와 센서 값이다.
+        arm_pose = {}
         for arm, name in ((kuka, "kuka"), (kawasaki, "kawasaki")):
-            link_pos, link_rot = link_pose(arm)  # 손끝 링크의 지금 실제 자세
-            # 1. 피드백을 실행기에 전달한다. fine의 도착 판정은 지령이 아니라 이 실측값을 사용한다.
-            tasks[name].step(dt, tcp=(link_pos, link_rot))
-            # 2. 실행기가 만든 지령 TCP를 IK에 넘긴다. joint_step의 관절 목표 전송까지 여기서 이어진다.
-            ik_step_pose(arm, tasks[name].tool, tasks[name].pos, tasks[name].rot, link_pos, link_rot, t)
-        # AMMR. 프로그램이 지령 몸체 자세(월드 좌표)와 지령 팔 관절각을 내놓는다.
-        # 베이스 관절값은 처음 놓은 자리(AMMR_HOME)가 0이므로 월드 좌표에서 그만큼 빼고 더한다.
-        q = ammr.get_dof_positions().numpy()[0]
-        tasks["ammr"].step(dt, base=(q[0] + AMMR_HOME[0], q[1] + AMMR_HOME[1], q[2]), joints=q[3:10])
-        base, arm_joints = tasks["ammr"].base, tasks["ammr"].joints
+            arm_pose[name] = link_pose(arm)  # 손끝 링크의 지금 실제 자세 ([m] 위치, 방향)
+            pub[name].publish(to_transform(now, *arm_pose[name], f"{name}/{arm['ee_link']}"))
+        q = ammr.get_dof_positions().numpy()[0]  # AMMR 관절 12개. 0~2가 베이스 가상 관절, 3~9가 팔 7축
+        joints = JointState(name=list(ammr.dof_names[:10]), position=[float(v) for v in q[:10]])
+        joints.header.stamp = stamp(now)
+        pub["ammr"].publish(joints)
+        x, y, yaw = h1_pose()
+        h1_msg = PoseStamped()
+        h1_msg.header.stamp, h1_msg.header.frame_id = stamp(now), "world"
+        h1_msg.pose.position.x, h1_msg.pose.position.y = float(x), float(y)
+        h1_msg.pose.orientation.z, h1_msg.pose.orientation.w = math.sin(yaw / 2), math.cos(yaw / 2)
+        pub["h1"].publish(h1_msg)
+        pub["pick"].publish(Bool(data=box_at_pick()))
+        pub["scan"].publish(Bool(data=box_at_scan()))
+        pub["clock"].publish(Clock(clock=stamp(now)))  # 마지막에 보낸다. 컨트롤러는 이것을 받으면 위 값들로 한 스텝 진행한다
+        # --- 2. 받기. 도착해 있는 메시지를 모두 처리한다. timeout_sec=0이라 기다리지 않는다.
+        #     spin_once는 할 일이 없어도 한 번에 약 0.2 ms가 든다. 처리한 메시지가 없으면 바로 멈춘다.
+        for _ in range(20):
+            before = state["received"]
+            executor.spin_once(timeout_sec=0.0)
+            if state["received"] == before:
+                break
+        # --- 3. 적용. 팔 두 대는 지령 TCP 자세로 IK를 한다. tool은 메시지에 실려 온 이름으로 찾는다.
+        for arm, name in ((kuka, "kuka"), (kawasaki, "kawasaki")):
+            msg = cmd.get(name)
+            if fresh(msg):
+                state["ages"].append(now - seconds(msg.header.stamp))
+                ik_step_pose(arm, TOOLS[msg.child_frame_id], *from_transform(msg), *arm_pose[name], t)
+            else:  # 지령이 아직 없다. 지금 지령 관절각을 그대로 유지한다
+                arm["robot"].set_dof_position_targets(arm["q_cmd"], dof_indices=list(range(6)))
+        # AMMR. 베이스 가상 관절 3개 + 팔 7축의 목표를 그대로 관절 구동기에 보낸다. 손가락 2개는 건드리지 않는다.
         # MoveBase는 차체용 가상 관절 3개, MoveAbsJ는 Panda 팔 7개에 대응한다. 바퀴 속도 제어는 아니다.
-        ammr_targets = [base[0] - AMMR_HOME[0], base[1] - AMMR_HOME[1], base[2], *arm_joints]
-        # H1. 프로그램은 "어디로 얼마나 빨리 걸어가라"는 목표만 내놓는다. 걷는 것은 보행 정책이 한다.
-        tasks["h1"].step(dt, base=pose)
-        goal = tasks["h1"].goal
-        # MoveBase 목표를 몸체 속도 [전진 m/s, 횡 m/s, 회전 rad/s]로 바꿔 아래 h1.step에 전달한다.
-        command = walk_command(pose, None) if goal is None else walk_command(pose, goal[0], goal[1])
-        # AMMR 관절 10개(베이스 3 + 팔 7)에 목표를 보낸다. 손가락 2개는 건드리지 않는다.
-        ammr.set_dof_position_targets(ammr_targets, dof_indices=list(range(10)))
-        state["ammr_x"] = ammr_targets[0]
-        h1.step(dt, command)  # H1 정책에 속도 명령을 넘긴다. 관절 19개의 목표는 정책이 계산한다
+        msg = cmd.get("ammr")
+        targets = list(msg.position[:10]) if fresh(msg) else [0.0, 0.0, 0.0, *TUCK]
+        ammr.set_dof_position_targets(targets, dof_indices=list(range(10)))
+        state["ammr_x"] = targets[0]
+        # H1. 속도 명령 [전진 m/s, 횡 m/s, 회전 rad/s]을 보행 정책에 넘긴다. 관절 19개의 목표는 정책이 계산한다.
+        msg = cmd.get("h1")
+        vel = [msg.twist.linear.x, msg.twist.linear.y, msg.twist.angular.z] if fresh(msg) else [0.0, 0.0, 0.0]
+        h1.step(dt, np.array(vel, dtype=np.float32))
     except Exception:  # noqa: BLE001 - 물리 콜백은 예외를 밖으로 던지면 안 된다
         # 오류 내용을 저장해 두면 아래 메인 루프가 그것을 보고 멈춘다.
         state["error"] = traceback.format_exc()
@@ -684,7 +632,7 @@ def frame():
     # 박스 6개를 이 시각의 위치로 옮긴다. 두 번째 인자는 [m] Kawasaki 그리퍼의 현재 위치이고,
     # 집힌 박스가 그 위치를 따라가는 데 쓰인다.
     link_pos, link_rot = link_pose(kawasaki)
-    state["boxes"] = box_positions_rapid(state["t"], link_pos + link_rot.apply(tGripper["pos"]))
+    state["boxes"] = box_positions_rapid(state["t"], link_pos + link_rot.apply(TOOLS["tGripper"]["pos"]))
     boxes.set_world_poses(positions=state["boxes"])
     return state["t"]
 
@@ -707,9 +655,9 @@ while simulation_app.is_running() and not state["error"]:
     ammr_x_min = min(ammr_x_min, ammr_q[0])
     # KUKA가 박스 위를 나란히 가는 구간에서, TCP와 가장 가까운 벨트 위 박스의 x 차이를 잰다.
     scan_pos, scan_rot = link_pose(kuka)
-    scan_tcp = scan_pos + scan_rot.apply(tScanner["pos"])
-    low_enough = scan_tcp[2] < pScanStart["pos"][2] + 0.02
-    if low_enough and pScanStart["pos"][0] + 0.05 < scan_tcp[0] < pScanEnd["pos"][0] - 0.05:
+    scan_tcp = scan_pos + scan_rot.apply(TOOLS["tScanner"]["pos"])
+    low_enough = scan_tcp[2] < SCAN_START[2] + 0.02
+    if low_enough and SCAN_START[0] + 0.05 < scan_tcp[0] < SCAN_START[0] + SCAN_LEN - 0.05:
         on_belt = [b for b in state["boxes"] if abs(b[1]) < 0.01 and abs(b[2] - (BELT_Z + BOX / 2)) < 0.01]
         scan_off = max(scan_off, min(abs(b[0] - scan_tcp[0]) for b in on_belt))
         scan_n += 1
@@ -732,9 +680,9 @@ elif args.seconds:
     # errors는 ik_step_pose가 스텝마다 쌓아 둔 [m] 손끝 목표와 실제 위치의 거리다.
     # aligns는 공구 축과 아래 방향 사이 각도의 코사인이다. 1이면 정확히 아래를 본다.
     checks = [
-        ("KUKA mean tip error < 0.03 m", np.mean(kuka["errors"]) < 0.03, f"mean {np.mean(kuka['errors']):.4f} max {np.max(kuka['errors']):.4f}"),
+        ("KUKA mean tip error < 0.03 m", np.mean(kuka["errors"]) < 0.03, f"mean {np.mean(kuka['errors']):.4f} max {max(kuka['errors'], default=math.inf):.4f}"),
         ("KUKA tool points down", np.mean(kuka["aligns"]) > 0.95, f"mean cos {np.mean(kuka['aligns']):.3f}"),
-        ("Kawasaki mean tip error < 0.03 m", np.mean(kawasaki["errors"]) < 0.03, f"mean {np.mean(kawasaki['errors']):.4f} max {np.max(kawasaki['errors']):.4f}"),
+        ("Kawasaki mean tip error < 0.03 m", np.mean(kawasaki["errors"]) < 0.03, f"mean {np.mean(kawasaki['errors']):.4f} max {max(kawasaki['errors'], default=math.inf):.4f}"),
         ("Kawasaki tool points down", np.mean(kawasaki["aligns"]) > 0.95, f"mean cos {np.mean(kawasaki['aligns']):.3f}"),
         ("AMMR base follows its path (< 0.3 m)", ammr_err < 0.3, f"max lag {ammr_err:.3f} m, reached x {ammr_x_min:.2f} m"),
         ("H1 stays upright (pelvis > 0.8 m)", h1_z_min > 0.8, f"min z {h1_z_min:.3f} m"),
@@ -744,6 +692,12 @@ elif args.seconds:
     slots = [np.array([PALLET_OUT[0] + dx, PALLET_OUT[1], PALLET_TOP + BOX / 2]) for dx in SLOT_X]
     offs = [min(float(np.linalg.norm(placed - slot)) for slot in slots) for placed in cell["log"]]  # [m] 칸 중심과의 거리
     expected = int(max(state["t"] - 5.0, 0.0) // TAKT) + 1  # 박스는 TAKT마다 오고, 집은 뒤 5초 안에 놓여야 한다
+    # ROS 2 연결 항목. 컨트롤러 지령이 실제로 도착해 적용됐는지 본다. age는 지령이 만들어진 뒤 적용될 때까지 걸린
+    # [s] 시뮬레이션 시간이다. 0.005가 물리 한 스텝이다.
+    ages = state["ages"]
+    checks.append(
+        ("ROS 2 commands from /rapid_controller were applied", len(ages) > 0, f"{len(ages)} arm commands, mean age {np.mean(ages or [math.inf]) * 1000:.1f} ms")
+    )
     checks += [
         ("RAPID program kept up with the takt", len(offs) >= expected, f"placed {len(offs)} boxes, expected {expected}"),
         ("RAPID program placed boxes on slots (< 0.01 m)", bool(offs) and max(offs) < 0.01, f"max offset {max(offs, default=math.inf):.4f} m"),
@@ -792,4 +746,9 @@ elif args.seconds:
 timeline.stop()  # 정지 버튼(■)을 누르는 것과 같다. 물리가 멈추고 장면이 재생 전 상태로 돌아간다
 SimulationManager.deregister_callback(callback_id)  # on_physics_step이 더는 불리지 않게 등록을 해제한다
 h1.close()  # H1 보행 정책이 쓰던 신경망과 구동기 자원을 놓아준다
+if controller is not None:  # 같이 띄운 컨트롤러 노드를 끝낸다
+    controller.terminate()
+    controller.wait(timeout=10)
+ros.destroy_node()  # 이 프로세스의 ROS 2 노드를 네트워크에서 내린다
+rclpy.shutdown()
 simulation_app.close()  # Isaac Sim 프로그램 자체를 끝낸다
