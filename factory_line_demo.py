@@ -565,7 +565,14 @@ def on_physics_step(dt, context):
         pub["scan"].publish(Bool(data=box_at_scan()))
         pub["clock"].publish(Clock(clock=stamp(now)))  # 마지막에 보낸다. 컨트롤러는 이것을 받으면 위 값들로 한 스텝 진행한다
         # --- 2. 받기. 도착해 있는 메시지를 모두 처리한다. timeout_sec=0이라 기다리지 않는다.
-        #     spin_once는 할 일이 없어도 한 번에 약 0.2 ms가 든다. 처리한 메시지가 없으면 바로 멈춘다.
+        #     먼저 방금 보낸 /clock에 대한 두 팔의 답을 기다린다([s] 최대 0.005). 안 기다리면 시뮬레이션이 컨트롤러보다
+        #     앞서 나가 지령이 100 ms 넘게 늦어지고 팔이 목표를 놓친다 (2026-11-23 60초 실행에서 확인).
+        #     spin_once는 할 일이 없어도 한 번에 약 0.2 ms가 든다. 그 뒤는 처리한 메시지가 없으면 바로 멈춘다.
+        deadline = time.perf_counter() + 0.005
+        while controller and time.perf_counter() < deadline and not all(
+            cmd.get(n) and seconds(cmd[n].header.stamp) >= now - 1e-6 for n in ("kuka", "kawasaki")
+        ):
+            executor.spin_once(timeout_sec=0.0)
         for _ in range(20):
             before = state["received"]
             executor.spin_once(timeout_sec=0.0)
