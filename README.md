@@ -32,7 +32,8 @@ AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다.
 | `tests/test_rapid_controller.py` | 컨트롤러 노드의 메시지 변환·재시작·지령 모양 단위 테스트 |
 | `WORK_PC_PROMPT.md` | 다른 PC에서 에이전트에게 이 방식으로 이어서 작업시키는 인계 프롬프트 |
 | `docs/rapid-execution-plan.md` | RAPID 방식 적용 계획 기록 |
-| `checklist.md`, `context-notes.md` | 작업 체크리스트와 결정 기록 |
+| `STATUS.md`, `checklist.md` | 지금 상태와 열린 할 일 |
+| `decisions/`, `log/`, `archive/` | 유효한 결정, 세션 일지, 정리 전 원본 (`context-notes.md`가 안내) |
 
 `docs/codex-warning-fix/`는 개발 환경(Codex 설정) 수정 기록이며 시뮬레이션과 관계없다.
 
