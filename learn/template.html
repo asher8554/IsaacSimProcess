@@ -1,0 +1,950 @@
+<title>Isaac Sim 공장 라인 학습서</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 왼쪽 고정 학습 지도 + 오른쪽 단계 패널(유리 판). 배경은 공장 바닥 도면 격자 위의 안전등 빛 */
+@font-face { font-family: "PretendardLocal"; font-weight: 100 900; font-display: swap;
+  src: local("Pretendard Variable"), local("Pretendard"), url("fonts/pretendard-subset.woff2") format("woff2"); }
+:root {
+  --bg: #0b1117; --bg-2: #0f1820;
+  --glass: rgba(20, 32, 42, 0.58); --glass-strong: rgba(26, 40, 52, 0.78);
+  --line: rgba(150, 200, 225, 0.16); --line-strong: rgba(150, 200, 225, 0.32);
+  --fg: #e7eef3; --muted: #a3b4c1; --faint: #74889a;
+  --amber: #f2a93b; --cyan: #56c6dc; --ok: #66d394; --bad: #f0705f; --violet: #b49cf5;
+  --code-bg: rgba(6, 12, 18, 0.72);
+  --font: "PretendardLocal", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+body {
+  margin: 0; font-family: var(--font); color: var(--fg); background: var(--bg); font-size: 16px; line-height: 1.72;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%, rgba(242, 169, 59, 0.20), transparent 60%),
+    radial-gradient(800px 700px at 100% 30%, rgba(86, 198, 220, 0.16), transparent 60%),
+    radial-gradient(700px 600px at 30% 100%, rgba(180, 156, 245, 0.12), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(150, 200, 225, 0.05) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgba(150, 200, 225, 0.05) 0 1px, transparent 1px 48px);
+  background-attachment: fixed;
+}
+a { color: var(--cyan); }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
+.wrap { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 28px; max-width: 1280px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 80px; }
+.glass { background: var(--glass); border: 1px solid var(--line); border-radius: 18px;
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 18px 48px rgba(0, 0, 0, 0.35); }
+/* 학습 지도 */
+nav.map { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; max-height: calc(100vh - 40px); overflow: auto; padding: 18px 14px; }
+nav.map h2 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 2px 8px 10px; }
+.progress { margin: 0 8px 14px; height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--amber), var(--cyan)); transition: width .3s; }
+.progress-text { margin: -6px 8px 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+nav.map ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.map a { display: grid; grid-template-columns: 30px 1fr; gap: 6px; align-items: baseline; padding: 6px 8px; border-radius: 10px; color: var(--fg); text-decoration: none; font-size: 14.5px; line-height: 1.4; }
+nav.map a:hover { background: rgba(255, 255, 255, 0.06); }
+nav.map a .n { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+nav.map a.done .n { color: var(--ok); }
+nav.map a.done .n::after { content: " ✓"; }
+main { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+/* 표지 */
+.hero { padding: 0; overflow: hidden; }
+.hero figure { margin: 0; position: relative; }
+.hero img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.hero figcaption { position: absolute; left: 12px; bottom: 10px; font-size: 12.5px; color: #dfe7ee; background: rgba(8, 14, 20, 0.6); padding: 3px 10px; border-radius: 999px; }
+.hero .body { padding: 26px 30px 30px; }
+.eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.12em; color: var(--amber); text-transform: uppercase; }
+h1 { font-size: clamp(28px, 4.2vw, 42px); line-height: 1.2; margin: 6px 0 12px; text-wrap: balance; font-weight: 800; letter-spacing: -0.01em; }
+.lede { color: var(--muted); font-size: 17px; max-width: 66ch; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.stat { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+/* 단계 */
+section.step { padding: 28px 30px 30px; scroll-margin-top: 20px; }
+.step-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.step-tag { font-family: var(--mono); font-size: 12.5px; color: var(--bg); background: var(--amber); padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+h2.title { font-size: clamp(22px, 3vw, 28px); line-height: 1.3; margin: 10px 0 6px; text-wrap: balance; }
+.goal { color: var(--muted); margin: 0 0 16px; max-width: 68ch; }
+.done-box { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); }
+.done-box input { accent-color: var(--ok); width: 16px; height: 16px; }
+.done-box:has(input:checked) { color: var(--ok); border-color: rgba(102, 211, 148, 0.45); }
+h3 { font-size: 18px; margin: 26px 0 8px; }
+p { margin: 0 0 12px; max-width: 70ch; }
+ol.do { margin: 6px 0 16px; padding-left: 0; list-style: none; counter-reset: s; display: grid; gap: 8px; }
+ol.do > li { counter-increment: s; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; }
+ol.do > li::before { content: counter(s); font-family: var(--mono); font-size: 13px; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(86, 198, 220, 0.14); color: var(--cyan); border: 1px solid rgba(86, 198, 220, 0.3); margin-top: 2px; }
+ul.plain { margin: 4px 0 14px; padding-left: 20px; }
+ul.plain li { margin: 3px 0; }
+code { font-family: var(--mono); font-size: 0.88em; background: rgba(255, 255, 255, 0.07); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.code { position: relative; margin: 10px 0 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--code-bg); }
+.code .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13.2px; line-height: 1.62; tab-size: 4; }
+.code pre code { background: none; padding: 0; font-size: inherit; }
+.code .c { color: #7f9aab; font-style: italic; }
+.code .k { color: var(--amber); }
+.code .s { color: #9fdcb1; }
+button.copy { font: inherit; font-size: 12px; color: var(--fg); background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-strong); padding: 3px 10px; border-radius: 8px; cursor: pointer; }
+button.copy:hover { background: rgba(255, 255, 255, 0.14); }
+details.full { margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.025); }
+details.full > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 14.5px; }
+details.full > .code { margin: 0 10px 10px; }
+.note { border-radius: 14px; padding: 12px 16px 12px 46px; margin: 12px 0 16px; position: relative; font-size: 15px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.035); }
+.note::before { position: absolute; left: 14px; top: 11px; font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.note.check { border-color: rgba(102, 211, 148, 0.4); background: rgba(102, 211, 148, 0.07); }
+.note.check::before { content: "OK"; color: var(--ok); font-size: 12px; top: 14px; }
+.note.trap { border-color: rgba(240, 112, 95, 0.42); background: rgba(240, 112, 95, 0.07); }
+.note.trap::before { content: "!"; color: var(--bad); left: 20px; }
+.note.why { border-color: rgba(180, 156, 245, 0.4); background: rgba(180, 156, 245, 0.07); }
+.note.why::before { content: "?"; color: var(--violet); left: 19px; }
+.note p:last-child, .note ul:last-child { margin-bottom: 0; }
+.note b.lab { display: block; margin-bottom: 2px; }
+figure.shot { margin: 14px 0 18px; }
+figure.shot img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
+figure.shot figcaption, .fig-cap { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid2 > *, .grid3 > * { min-width: 0; }
+.chart-card { margin: 14px 0 18px; padding: 16px 16px 12px; border-radius: 16px; background: var(--glass-strong); border: 1px solid var(--line); }
+.chart-card h4 { margin: 0 0 2px; font-size: 15px; }
+.chart-card .sub { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.chart-box { position: relative; height: 280px; }
+.chart-box.tall { height: 340px; }
+.chart-box.short { height: 220px; }
+.src { font-size: 12px; color: var(--faint); margin-top: 6px; }
+.table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 13.5px; background: rgba(255, 255, 255, 0.03); white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13.5px; }
+tr:last-child td { border-bottom: 0; }
+svg.diagram { width: 100%; height: auto; display: block; }
+.diagram-card { margin: 14px 0 18px; padding: 14px; border-radius: 16px; background: var(--glass-strong); border: 1px solid var(--line); overflow-x: auto; }
+.diagram-card svg { min-width: 560px; }
+.diagram-card.wide svg { min-width: 640px; }
+.pill { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); }
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 18px; }
+.flow .card { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); font-size: 14px; }
+.flow .card b { display: block; font-family: var(--mono); font-size: 13.5px; color: var(--amber); margin-bottom: 4px; }
+.flow .card .to { color: var(--cyan); font-size: 13px; margin-top: 6px; display: block; }
+.mobile-map { display: none; }
+footer { color: var(--faint); font-size: 13px; padding: 10px 6px; }
+@media (max-width: 980px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  nav.map { display: none; }
+  .mobile-map { display: block; padding: 6px 14px; }
+  .mobile-map summary { cursor: pointer; padding: 8px 2px; font-weight: 600; }
+  .mobile-map ol { padding-left: 20px; margin: 4px 0 10px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  section.step { padding: 22px 16px 22px; }
+  .hero .body { padding: 20px 16px 22px; }
+  .grid2, .grid3, .flow { grid-template-columns: minmax(0, 1fr); }
+  .chart-box { height: 240px; }
+}
+</style>
+
+<div class="wrap">
+  <nav class="map glass" aria-label="학습 지도">
+    <h2>학습 지도</h2>
+    <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+    <div class="progress-text" id="ptext">0 / 13 단계</div>
+    <ol id="toc"></ol>
+  </nav>
+
+  <main>
+    <header class="hero glass">
+      <figure>
+        <img src="img/hero.jpg" alt="완성된 공장 라인. 컨베이어 위 박스, KUKA와 Kawasaki 산업용 로봇, 바퀴형 이동 로봇, 걷는 휴머노이드" width="1280" height="720">
+        <figcaption>완성본 factory_line_demo.py 시뮬레이션 16초 시점 (2026-11-23 헤드리스 캡처)</figcaption>
+      </figure>
+      <div class="body">
+        <div class="eyebrow">Isaac Sim 6.2 · 백지에서 공장 라인까지</div>
+        <h1>빈 화면에서 시작해 로봇 네 대가 일하는 라인을 직접 만든다</h1>
+        <p class="lede">상자 하나를 떨어뜨리는 것부터 시작한다. 공장 바닥을 깔고, CAD 파일로 받은 로봇에 관절을 달고, 로봇을 좌표로 움직이고, 마지막에 RAPID 스타일 프로그램을 ROS 2 노드로 떼어 낸다. 단계마다 직접 돌려 본 코드와 그 실행에서 나온 화면·수치를 붙였다.</p>
+        <div class="stats">
+          <div class="stat"><b>4대</b><span>KUKA·Kawasaki·AMMR·H1</span></div>
+          <div class="stat"><b>200 Hz</b><span>물리 한 스텝 0.005 s</span></div>
+          <div class="stat"><b>8.0 s</b><span>박스 한 개 택트 타임</span></div>
+          <div class="stat"><b>15 / 15</b><span>60초 자체 점검 통과</span></div>
+        </div>
+      </div>
+    </header>
+
+    <details class="mobile-map glass"><summary>학습 지도 열기</summary><ol id="toc-m"></ol></details>
+
+    <!-- ============================================================ 0 -->
+    <section class="step glass" id="s0" data-title="완성본부터 돌려 본다">
+      <div class="step-head"><span class="step-tag">STEP 00</span><label class="done-box"><input type="checkbox" id="done-s0"> 다 했다</label></div>
+      <h2 class="title">완성본부터 돌려 본다</h2>
+      <p class="goal">무엇을 만들게 되는지 먼저 본다. 이 저장소의 완성본을 그대로 실행하고, 화면의 각 창이 무엇인지 익힌다.</p>
+      <ol class="do">
+        <li><div>PowerShell을 열고 저장소 폴더로 간다. <code>cd E:\Github\IsaacSimProcess</code></div></li>
+        <li><div>완성본을 실행한다. 이 명령 하나가 Isaac Sim과 컨트롤러 노드를 함께 띄운다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>PowerShell</span><button class="copy" type="button">복사</button></div><pre><code>C:\isaacsim-6.2\python.bat factory_line_demo.py</code></pre></div>
+      <div class="note check"><b class="lab">이렇게 나오면 된다</b><p>터미널에 <code>[MOTION] ros2 | /rapid_controller ...</code>와 <code>[ROS2] started /rapid_controller</code>가 찍히고, 창이 뜬 뒤 바로 재생된다.</p></div>
+      <div class="chart-card">
+        <h4>처음 한 번만 오래 걸린다</h4>
+        <p class="sub">창고·로봇 에셋 약 1 GB를 인터넷에서 받는다. 두 번째부터는 캐시(<code>%LOCALAPPDATA%\ov\cache\hub</code>)를 쓴다.</p>
+        <div class="chart-box short"><canvas id="c-load" aria-label="첫 실행 약 720초, 캐시 사용 약 30초"></canvas></div>
+        <div class="src">이 PC(RTX 3070 8 GB)에서 잰 값. 다운로드 속도 약 1.4 MB/s 기준 (2026-11-12)</div>
+      </div>
+      <figure class="shot">
+        <img src="img/gui.jpg" alt="Isaac Sim 창. 가운데 뷰포트, 오른쪽 Stage 트리, 아래 Content 브라우저" width="1600" height="1031" loading="lazy">
+        <figcaption>창 구성. 가운데가 <b>뷰포트</b>, 오른쪽 위 <b>Stage</b>는 장면 안 물체의 트리(<code>/World/Kuka</code> 같은 경로), 오른쪽 아래 <b>Property</b>는 선택한 물체의 속성, 아래 <b>Content</b>는 파일 브라우저다. 왼쪽 세로 막대의 ▶/❚❚/■가 재생·일시정지·정지다.</figcaption>
+      </figure>
+      <div class="grid3">
+        <figure class="shot"><img src="img/t06.jpg" alt="6초 시점" width="1100" height="619" loading="lazy"><figcaption>6초. Kawasaki가 벨트 끝에서 집는다</figcaption></figure>
+        <figure class="shot"><img src="img/t26.jpg" alt="26초 시점" width="1100" height="619" loading="lazy"><figcaption>26초. AMMR이 버퍼 쪽으로 간다</figcaption></figure>
+        <figure class="shot"><img src="img/t36.jpg" alt="36초 시점" width="1100" height="619" loading="lazy"><figcaption>36초. H1이 통로를 순찰한다</figcaption></figure>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>로봇</th><th>하는 일</th><th>움직이는 방법 (이 학습서의 단계)</th></tr></thead>
+        <tbody>
+          <tr><td>KUKA KR210 L150</td><td>벨트 위 박스를 같은 속도로 따라가며 검사</td><td>MoveL → 미분 IK (7·8단계)</td></tr>
+          <tr><td>Kawasaki RS080N + RG2</td><td>벨트 끝에서 박스를 들어 팔레트 3칸에 적재</td><td>MoveL → 미분 IK, SetDO 신호 (8·9단계)</td></tr>
+          <tr><td>AMMR (Ridgeback + Franka)</td><td>두 팔레트 사이를 왕복하며 팔을 뻗음</td><td>MoveBase·MoveAbsJ → 관절 목표 (10단계)</td></tr>
+          <tr><td>Unitree H1</td><td>라인 옆 통로를 사각형으로 순찰</td><td>MoveBase → 속도 명령 → 내장 보행 정책 (10단계)</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ============================================================ 1 -->
+    <section class="step glass" id="s1" data-title="작업 폴더와 실행 방식">
+      <div class="step-head"><span class="step-tag">STEP 01</span><label class="done-box"><input type="checkbox" id="done-s1"> 다 했다</label></div>
+      <h2 class="title">작업 폴더를 만들고 실행 방식을 익힌다</h2>
+      <p class="goal">Isaac Sim은 두 가지로 켤 수 있다. 이 학습서는 전부 두 번째인 "파이썬 스크립트가 Isaac Sim을 켜는 방식"을 쓴다.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>방식</th><th>명령</th><th>언제 쓰나</th></tr></thead>
+        <tbody>
+          <tr><td>GUI 앱</td><td><code>C:\isaacsim-6.2\isaac-sim.bat</code></td><td>메뉴로 모델을 가져오고 관절을 손으로 다는 일 (4단계)</td></tr>
+          <tr><td>스탠드얼론 스크립트</td><td><code>C:\isaacsim-6.2\python.bat 내파일.py</code></td><td>장면을 코드로 짜고 로봇을 제어하는 일 (나머지 전부)</td></tr>
+        </tbody>
+      </table></div>
+      <ol class="do">
+        <li><div>학습 폴더를 만든다. 예시는 <code>E:\IsaacLearn</code>이다.</div></li>
+        <li><div>저장소의 <code>rapid_style.py</code>를 학습 폴더로 복사한다. 7·8단계가 이 파일의 <code>robtarget</code>·<code>MoveL</code>을 쓴다. numpy·scipy만 쓰는 파일이라 따로 설치할 것은 없다.</div></li>
+        <li><div>스크립트는 항상 <code>python.bat</code>으로 실행한다. 이 배치 파일이 Isaac Sim에 들어 있는 Python 3.12와 경로를 잡아 준다. 시스템 Python이나 가상환경으로는 <code>isaacsim</code>을 찾지 못한다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>PowerShell</span><button class="copy" type="button">복사</button></div><pre><code>mkdir E:\IsaacLearn
+copy E:\Github\IsaacSimProcess\rapid_style.py E:\IsaacLearn\
+cd E:\IsaacLearn</code></pre></div>
+      <div class="diagram-card">
+        <svg class="diagram" viewBox="0 0 720 190" role="img" aria-label="스크립트 실행 순서. python.bat이 스크립트를 실행하고, SimulationApp 생성 시 Isaac Sim이 켜지며, 그 뒤에야 isaacsim 모듈을 import할 수 있다">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--cyan)"/></marker></defs>
+          <g font-family="var(--font)" font-size="14" fill="var(--fg)">
+            <rect x="10" y="40" width="150" height="70" rx="12" fill="rgba(255,255,255,0.05)" stroke="var(--line-strong)"/>
+            <text x="85" y="70" text-anchor="middle" font-weight="700">python.bat</text><text x="85" y="92" text-anchor="middle" fill="var(--muted)" font-size="12.5">Isaac Sim의 Python 3.12</text>
+            <rect x="200" y="40" width="190" height="70" rx="12" fill="rgba(242,169,59,0.12)" stroke="var(--amber)"/>
+            <text x="295" y="70" text-anchor="middle" font-weight="700">SimulationApp({...})</text><text x="295" y="92" text-anchor="middle" fill="var(--muted)" font-size="12.5">여기서 앱·물리 엔진이 켜진다</text>
+            <rect x="430" y="40" width="280" height="70" rx="12" fill="rgba(86,198,220,0.10)" stroke="var(--cyan)"/>
+            <text x="570" y="70" text-anchor="middle" font-weight="700">import isaacsim.core... / omni...</text><text x="570" y="92" text-anchor="middle" fill="var(--muted)" font-size="12.5">이 줄들은 반드시 그 뒤에 쓴다</text>
+            <line x1="160" y1="75" x2="196" y2="75" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ar)"/>
+            <line x1="390" y1="75" x2="426" y2="75" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ar)"/>
+            <text x="10" y="150" fill="var(--muted)" font-size="13">별도 Isaac Sim 프로세스에 명령을 보내는 구조가 아니다. 스크립트 하나가 앱 전체를 품고 있고, 스크립트가 끝나면 앱도 끝난다.</text>
+          </g>
+        </svg>
+      </div>
+      <figure class="shot"><img src="img/empty.jpg" alt="아무것도 없는 Isaac Sim 6.2 뷰포트" width="1100" height="708" loading="lazy"><figcaption>막 켠 Isaac Sim 6.2. 빈 장면(New Stage)이다. 좌표축은 Z가 위, 단위 표시 <code>m</code>은 미터다.</figcaption></figure>
+      <div class="note trap"><b class="lab">함정</b><p><code>from isaacsim.core...</code>를 <code>SimulationApp</code>보다 위에 쓰면 모듈을 찾지 못하고 끝난다. 이 학습서의 모든 스크립트가 맨 위에서 앱부터 만드는 이유다.</p></div>
+    </section>
+
+    <!-- ============================================================ 2 -->
+    <section class="step glass" id="s2" data-title="빈 장면에 물리를 켠다">
+      <div class="step-head"><span class="step-tag">STEP 02</span><label class="done-box"><input type="checkbox" id="done-s2"> 다 했다</label></div>
+      <h2 class="title">빈 장면에 물리를 켜고 상자를 떨어뜨린다</h2>
+      <p class="goal">장면(Stage)을 만들고, 물리를 켜고, 재생하는 뼈대를 익힌다. 앞으로 모든 단계가 이 뼈대 위에 붙는다.</p>
+      <ol class="do">
+        <li><div>아래 전체 코드를 <code>E:\IsaacLearn\step02_physics.py</code>로 저장한다.</div></li>
+        <li><div>창을 띄워 실행한다. 상자가 2 m 높이에서 떨어져 바닥에 멈춘다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>PowerShell</span><button class="copy" type="button">복사</button></div><pre><code>C:\isaacsim-6.2\python.bat step02_physics.py</code></pre></div>
+      <h3>핵심 네 가지</h3>
+      <ul class="plain">
+        <li><b>장면과 프림.</b> 장면 안의 모든 것은 <code>/World/Box</code> 같은 경로를 가진 <b>프림</b>이다. GUI의 Stage 창 트리가 이것이다.</li>
+        <li><b>모양 ≠ 물리.</b> <code>Cube</code>는 모양만 만든다. <code>GeomPrim(..., apply_collision_apis=True)</code>로 충돌체를, <code>RigidPrim</code>으로 강체를 붙여야 중력을 받는다. 바닥은 충돌체만 있어서 움직이지 않는다.</li>
+        <li><b>두 개의 시계.</b> 물리는 0.005 s마다 계산하고, 화면은 <code>simulation_app.update()</code> 한 번에 1장 그린다. 화면 간격을 <code>RenderingManager.set_dt(8 / 200)</code>(0.04 s)으로 요청했지만, 콜백으로 스텝을 세어 보니 이 PC에서는 <b>update 한 번에 물리 6스텝(0.03 s)</b>이 돌았다. 그래서 시간은 프레임 수가 아니라 <b>스텝 수로 센다</b>.</li>
+        <li><b>재생해야 돈다.</b> <code>timeline.play()</code>는 GUI의 ▶ 버튼과 같다. 재생 전에는 장면이 멈춰 있다.</li>
+      </ul>
+      <div class="diagram-card">
+        <svg class="diagram" viewBox="0 0 720 170" role="img" aria-label="update 한 번에 물리 6스텝(각 5 ms)과 화면 1장. 이 PC 측정값">
+          <g font-family="var(--font)" font-size="13" fill="var(--fg)">
+            <text x="10" y="22" fill="var(--muted)">simulation_app.update() 한 번 = 물리 6스텝 = 0.03 s (2026-11-23 이 PC에서 센 값. 요청은 8스텝)</text>
+            <g id="ticks"></g>
+            <rect x="10" y="104" width="510" height="34" rx="8" fill="rgba(86,198,220,0.14)" stroke="var(--cyan)"/>
+            <text x="265" y="126" text-anchor="middle">화면 그리기 1장</text>
+          </g>
+        </svg>
+      </div>
+      <div class="chart-card">
+        <h4>상자 높이: 실제 시뮬레이션 vs 자유낙하 계산</h4>
+        <p class="sub">점은 이 스크립트를 헤드리스로 돌려 update마다(0.03 s) 찍은 상자 중심 높이, 선은 z = 2.0 − ½·9.81·t² 계산값이다. 상자 한 변이 0.3 m라서 중심이 0.15 m에서 멈춘다.</p>
+        <div class="chart-box"><canvas id="c-fall" aria-label="상자 높이 그래프"></canvas></div>
+        <div class="src" id="src-fall"></div>
+      </div>
+      <details class="full"><summary>step02_physics.py 전체 코드</summary>{{code:step02_physics.py}}</details>
+      <div class="note check"><b class="lab">확인</b><p>상자가 떨어져 바닥에 서면 된다. 터미널에 <code>Z 시각 높이 steps 스텝수</code> 줄이 계속 찍힌다. 스텝 수가 6씩 늘면 이 PC와 같다. <code>--frames 45</code>를 주면 시뮬레이션 1.35초 뒤 <code>STEP02 OK</code>로 끝난다.</p></div>
+    </section>
+
+    <!-- ============================================================ 3 -->
+    <section class="step glass" id="s3" data-title="공장 바닥을 깐다">
+      <div class="step-head"><span class="step-tag">STEP 03</span><label class="done-box"><input type="checkbox" id="done-s3"> 다 했다</label></div>
+      <h2 class="title">창고·컨베이어·팔레트로 공장 바닥을 깐다</h2>
+      <p class="goal">모델 파일(USD)을 장면에 끼워 넣는 <code>add()</code> 하나로 라인을 짠다. 놓은 뒤에는 높이를 실측한다.</p>
+      <ol class="do">
+        <li><div>2단계 파일에서 바닥·상자 부분을 지우고, <code>add()</code> 함수와 설비 배치를 넣는다. 전체 코드는 아래에 있다.</div></li>
+        <li><div>실행한다. 처음이면 에셋을 받느라 오래 걸린다. <code>BBOX</code> 줄로 설비 높이가 찍힌다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>step03_scene.py 중 이번 단계의 핵심</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:step03_scene.py:def add(:add("/Isaac/Props/Pallet/pallet.usd", "/World/PalletBuffer"}}</code></pre></div>
+      <div class="note why"><b class="lab">참조(Reference)로 불러오는 이유</b><p>파일 내용을 장면에 복사하지 않고 "이 경로에 저 파일을 끼운다"고만 적는다. 같은 컨베이어 파일을 세 번 놓아도 가볍고 원본은 바뀌지 않는다. 경로(<code>/World/Conveyor_0</code>)는 서로 겹치면 안 된다.</p></div>
+      <div class="diagram-card wide">
+        <h4 style="margin:0 0 4px;font-size:15px">라인 배치도 (위에서 본 모습, 1칸 = 1 m)</h4>
+        <p class="sub" style="margin:0 0 8px;font-size:13px;color:var(--muted)">좌표는 <code>line_common.py</code>와 스크립트의 실제 값이다. 컨베이어·팔레트 외곽은 3단계 실행에서 잰 바운딩 박스다.</p>
+        <svg class="diagram" id="layout" viewBox="0 0 700 640" role="img" aria-label="라인 배치도"></svg>
+      </div>
+      <h3>실측값</h3>
+      <p>불러온 모델은 파일마다 크기가 다르다. 그래서 놓고 나서 감싸는 상자(바운딩 박스)로 잰다. 팔레트 윗면 0.143 m는 완성본의 <code>PALLET_TOP</code>과 같다. 컨베이어는 1.166 m가 나오는데, 바운딩 박스가 가장 높은 부품까지 감싸기 때문이다. 박스가 실제로 놓이는 롤러 윗면은 0.77 m(완성본 <code>BELT_Z</code>, 2026-11-12 실측)다. <b>무엇의 높이를 쟀는지</b> 확인하고 쓴다.</p>
+      <div class="table-wrap"><table id="bbox-table"><thead><tr><th>프림</th><th class="num">x 범위 [m]</th><th class="num">y 범위 [m]</th><th class="num">윗면 z [m]</th></tr></thead><tbody></tbody></table></div>
+      <figure class="shot"><img src="img/s03.jpg" alt="창고에 컨베이어 3개, 팔레트 2개, 박스 6개를 놓은 장면" width="1280" height="720" loading="lazy"><figcaption>3단계 실행 화면 (헤드리스 캡처). 아직 로봇이 없다.</figcaption></figure>
+      <details class="full"><summary>step03_scene.py 전체 코드</summary>{{code:step03_scene.py}}</details>
+      <div class="note trap"><b class="lab">함정</b><ul class="plain"><li>충돌체가 없는 소품은 로봇이 그대로 통과한다. 이 컨베이어도 롤러에만 충돌체가 있다.</li><li>mm로 그린 CAD를 그대로 놓으면 1000배로 커진다. 놓은 뒤 반드시 크기를 잰다.</li></ul></div>
+    </section>
+
+    <!-- ============================================================ 4 -->
+    <section class="step glass" id="s4" data-title="외부 로봇 파일을 로봇으로 만든다">
+      <div class="step-head"><span class="step-tag">STEP 04</span><label class="done-box"><input type="checkbox" id="done-s4"> 다 했다</label></div>
+      <h2 class="title">외부 로봇 3D 파일을 움직이는 로봇으로 만든다</h2>
+      <p class="goal">ABB에서 받은 GoFa CRB15000 10 kg·1.52 m STEP 파일을 Isaac Sim에서 관절이 있는 로봇으로 만들고, 공장 장면에 놓아 코드로 움직인다. 2026-10-25~26 실습 기록을 그대로 따라간 순서다.</p>
+      <h3>먼저 파일 형식부터 본다</h3>
+      <div class="flow">
+        <div class="card"><b>.usd .usda .usdz</b>이미 Isaac Sim 형식이다. 관절까지 들어 있으면 바로 쓴다.<span class="to">→ add()로 놓기</span></div>
+        <div class="card"><b>STEP (CAD)</b>모양만 있다. 관절·질량이 없다.<span class="to">→ CAD Converter → 직접 리깅</span></div>
+        <div class="card"><b>OBJ · FBX · glTF</b>메시만 있다.<span class="to">→ Asset Converter → 직접 리깅</span></div>
+        <div class="card"><b>URDF · MJCF</b>링크·관절 정의가 들어 있다.<span class="to">→ URDF Importer → 확인·수리</span></div>
+      </div>
+      <h3>로봇이 움직이려면 네 가지가 필요하다</h3>
+      <div class="diagram-card wide">
+        <svg class="diagram" id="anatomy" viewBox="0 0 760 250" role="img" aria-label="Articulation 구조. 월드에 Fixed Joint와 Articulation Root로 고정된 LINK00, 그 뒤로 Revolute Joint와 Angular Drive로 이어진 LINK01~06"></svg>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>필요한 것</th><th>어디에 붙이나</th><th>GoFa 실습에서 넣은 값</th></tr></thead>
+        <tbody>
+          <tr><td>Collider (충돌체)</td><td>링크 아래 <b>Mesh</b></td><td>Convex Hull, Hull Vertex Limit 64</td></tr>
+          <tr><td>Rigid Body (강체)</td><td>링크의 바깥 <b>Xform</b> (Mesh 아님)</td><td>Kinematic 해제, Angular Damping 0.05</td></tr>
+          <tr><td>Joint + Drive (관절과 구동기)</td><td>부모 링크 → 자식 링크</td><td>Revolute 6개, Angular Drive, 위치 제한 ±90° (실습용 임시값)</td></tr>
+          <tr><td>Fixed Joint + Articulation Root</td><td>월드 → LINK00 (베이스 고정)</td><td>Solver Position Iteration 32</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>GUI에서 따라 하기</h3>
+      <ol class="do">
+        <li><div><b>CAD Converter 켜기.</b> <code>isaac-sim.bat</code>으로 앱을 켜고 Window &gt; Extensions에서 <code>omni.kit.converter.cad</code>를 검색해 Enabled로 켠다.</div></li>
+        <li><div><b>가져오기.</b> File &gt; <b>Import</b>(Open 아님)로 조립체 STEP(<code>..._ASM_CAD.step</code>)을 고른다. 생긴 루트 Xform의 <code>Scale:unitsResolve</code>가 0.001이면 mm가 m로 이미 맞춰진 것이다. 0.001을 또 곱하지 않는다.</div></li>
+        <li><div><b>저장.</b> File &gt; Save As로 <code>gofa_rigging.usd</code>를 만든다. 이후 작업은 이 파일에 한다.</div></li>
+        <li><div><b>링크마다 (LINK00~06).</b> 바깥 Xform의 Instanceable 체크를 끈다. 하위 Mesh에 우클릭 Add &gt; Physics &gt; <b>Collider</b>, 바깥 Xform에 Add &gt; Physics &gt; <b>Rigid Body</b>.</div></li>
+        <li><div><b>베이스 고정.</b> LINK00을 고르고 Create &gt; Physics &gt; Joint &gt; <b>Fixed Joint</b>. Body0을 비워 두면 월드에 고정된다. 이 FixedJoint에 Add &gt; Physics &gt; <b>Articulation Root</b>.</div></li>
+        <li><div><b>회전 관절.</b> 부모 Xform을 고르고 Ctrl로 자식 Xform을 더 고른 뒤 Create &gt; Physics &gt; Joint &gt; <b>Revolute Joint</b>. 축과 피벗은 아래 표대로 고친다. 관절마다 Add &gt; Physics &gt; <b>Angular Drive</b>.</div></li>
+        <li><div><b>이름 정리.</b> 관절 프림 이름을 <code>joint_1</code>~<code>joint_6</code>으로 바꾼다. 모두 <code>RevoluteJoint</code>면 ROS 2 관절 이름이 겹친다.</div></li>
+      </ol>
+      <div class="grid2">
+        <figure class="shot"><img src="img/g13.jpg" alt="Mesh 우클릭 메뉴에서 Add, Physics, Collider" width="1400" height="788" loading="lazy"><figcaption>④ Mesh 우클릭 → Add → Physics → Collider</figcaption></figure>
+        <figure class="shot"><img src="img/g17.jpg" alt="Fixed Joint 생성 메뉴" width="1400" height="788" loading="lazy"><figcaption>⑤ LINK00에 Fixed Joint 만들기</figcaption></figure>
+        <figure class="shot"><img src="img/g32.jpg" alt="FixedJoint에 Articulation Root 추가" width="1400" height="788" loading="lazy"><figcaption>⑤ FixedJoint에 Articulation Root를 붙인다 (RevoluteJoint가 아니다)</figcaption></figure>
+        <figure class="shot"><img src="img/g49.jpg" alt="두 번째 관절 Y축 피벗 150, 0, 400" width="1400" height="788" loading="lazy"><figcaption>⑥ joint_2. Axis Y, Local Pos (150, 0, 400)</figcaption></figure>
+      </div>
+      <h3>관절 축과 피벗</h3>
+      <p>CAD의 원형 경계(구멍·축받이)를 읽어 회전 중심을 계산했다. 부모 scale 0.001을 그대로 두었으므로 값은 <b>mm</b>다. Local Position 0과 1은 같은 값, Rotation은 0이다.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>관절</th><th>Body0 → Body1</th><th>Axis</th><th class="num">Local Pos 0/1 [mm]</th></tr></thead>
+        <tbody>
+          <tr><td>joint_1</td><td>LINK00 → 01</td><td>Z</td><td class="num">(0, 0, 0)</td></tr>
+          <tr><td>joint_2</td><td>LINK01 → 02</td><td>Y</td><td class="num">(150, 0, 400)</td></tr>
+          <tr><td>joint_3</td><td>LINK02 → 03</td><td>Y</td><td class="num">(150, 0, 1107)</td></tr>
+          <tr><td>joint_4</td><td>LINK03 → 04</td><td>X</td><td class="num">(246, 0, 1217)</td></tr>
+          <tr><td>joint_5</td><td>LINK04 → 05</td><td>Y</td><td class="num">(787, 0, 1217)</td></tr>
+          <tr><td>joint_6</td><td>LINK05 → 06</td><td>X</td><td class="num">(855, 0, 1297)</td></tr>
+        </tbody>
+      </table></div>
+      <div class="chart-card">
+        <h4>Drive 값을 정한 방법</h4>
+        <p class="sub">acceleration 타입에서 강성 k와 감쇠 c를 고유진동수 ω와 감쇠비 ζ=1로 정했다. k = ω², c = 2ζω. 1축은 ω=5(25/10), 나머지는 ω=10(100/20). Max Force는 링크 무게 × 팔 길이로 추정한 중력 토크 상한이다.</p>
+        <div class="chart-box short"><canvas id="c-drive" aria-label="축별 Max Force 10, 200, 50, 10, 40, 10"></canvas></div>
+        <div class="src">GoFa 실습 기록의 최종 실습값. ABB 공식 값이 아니다.</div>
+      </div>
+      <figure class="shot"><img src="img/g60.jpg" alt="LINK02 질량 11.51 kg 표시" width="1400" height="788" loading="lazy"><figcaption>질량 확인. 뷰포트 눈 아이콘 → Show By Type → Physics → Mass Properties → Selected. LINK02는 11.51 kg으로 계산됐다.</figcaption></figure>
+
+      <h3>ROS 2로 관절 하나 돌려 보기 (GUI 방식)</h3>
+      <ol class="do">
+        <li><div>Tools &gt; Robotics &gt; ROS 2 OmniGraphs &gt; <b>Joint States</b>. Articulation Root에 FixedJoint 경로를 넣는다 (Stage에서 Copy Prim Path, 밑줄 두 개 주의).</div></li>
+        <li><div>그래프의 topic을 <code>/gofa/joint_states</code>, <code>/gofa/joint_command</code>로 바꾸고 재생한다.</div></li>
+        <li><div>ROS 2 셸에서 명령을 보낸다. position 단위는 rad다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>ROS 2 셸</span><button class="copy" type="button">복사</button></div><pre><code>ros2 topic pub --once /gofa/joint_command sensor_msgs/msg/JointState "{name: [joint_6], position: [0.1745329252]}"
+ros2 topic echo /gofa/joint_states --once</code></pre></div>
+      <div class="grid2">
+        <figure class="shot"><img src="img/g120.jpg" alt="ROS2 Joint States Graph 생성 창" width="1400" height="788" loading="lazy"><figcaption>Joint States 그래프 만들기</figcaption></figure>
+        <figure class="shot"><img src="img/g143.jpg" alt="joint_6 피드백 0.1674 rad" width="1400" height="1155" loading="lazy"><figcaption>10°(0.1745 rad) 명령 → joint_6 실제 0.1674 rad (9.59°)</figcaption></figure>
+      </div>
+      <div class="note trap"><b class="lab">함정 (실습에서 실제로 만난 것)</b><ul class="plain">
+        <li>Play 중에 관절을 만들면 이상한 오프셋이 들어간다. 관절은 Stop 상태에서 만든다.</li>
+        <li>ROS 명령을 받아도 Property의 Drive Target Position은 0으로 남는다. 런타임 값만 바뀌기 때문이다. <code>/joint_states</code>로 확인한다.</li>
+        <li>URDF 내보내기(File &gt; Export to URDF)가 <code>missing or non-finite joint limits (... velocity)</code>로 실패하면 Joint &gt; Advanced &gt; <b>Maximum Joint Velocity</b>가 inf인 것이다. 1~5축 500, 6축 60 deg/s를 넣었다.</li>
+        <li>URDF를 다시 가져오니 베이스만 1000배, 색 손실, 3축 흔들림이 생겼다. 원인은 베이스 메시 scale 누락, LINK06 충돌체 없음(질량 음수 경고), LINK02 무게중심이 조립체 좌표로 남은 것이었다.</li>
+      </ul></div>
+      <div class="chart-card">
+        <h4>수리 전후 5초 시험: 관절이 멈추는가</h4>
+        <p class="sub">모든 관절 목표 0, 헤드리스, CPU, 1/120 s, 600스텝. 막대는 마지막 1초 동안의 진동 폭 [deg]이다. 수리 전 joint_3은 35.09° 폭으로 흔들렸고, 수리 후에는 모든 관절이 0°다.</p>
+        <div class="chart-box short"><canvas id="c-repair" aria-label="수리 전 joint_3 진동 폭 35.09도, 수리 후 0도"></canvas></div>
+        <div class="src">physics_check.json (2026-10-26)</div>
+      </div>
+      <div class="grid2">
+        <figure class="shot"><img src="img/g151.jpg" alt="Maximum Joint Velocity가 inf" width="1400" height="788" loading="lazy"><figcaption>URDF 내보내기 실패 원인. Maximum Joint Velocity = inf</figcaption></figure>
+        <figure class="shot"><img src="img/g166.jpg" alt="수리한 GoFa USD를 연 화면" width="1400" height="788" loading="lazy"><figcaption>최종 자산 <code>gofa_physics_repaired.usda</code></figcaption></figure>
+      </div>
+
+      <h3>만든 로봇을 공장 장면에 놓고 코드로 움직이기</h3>
+      <p>여기부터 다시 스크립트다. 내 PC의 파일도 3단계의 <code>add()</code>로 똑같이 놓는다. 다른 점은 <b>Articulation Root가 어디 붙었는지 찾아서</b> 그 경로로 잡는 것 하나다. 이 USD는 URDF를 거쳐 왔기 때문에 루트가 LINK00 프림에 있다.</p>
+      <div class="note why"><b class="lab">5단계의 my_scene.py를 먼저 쓴다</b><p>이 스크립트는 5단계에서 만드는 <code>my_scene.py</code>의 <code>build_scene()</code>과 <code>add()</code>를 가져다 쓴다. 처음 따라 한다면 5단계의 <code>my_scene.py</code>를 먼저 저장하고 돌아온다.</p></div>
+      <div class="code"><div class="bar"><span>step04_gofa.py 중 핵심</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:step04_gofa.py:build_scene(simulation_app, with_robots=False):gofa = Articulation(roots[0])}}</code></pre></div>
+      <div class="table-wrap"><table><thead><tr><th>실행에서 찍힌 값</th><th>내용</th></tr></thead><tbody id="gofa-table"></tbody></table></div>
+      <div class="chart-card">
+        <h4>GoFa joint_1·joint_2: 목표 vs 실제</h4>
+        <p class="sub">joint_1을 ±0.8 rad, joint_2를 ±0.3 rad, 6초 주기로 흔들었다. 리깅에서 넣은 Drive만으로 따라간다. joint_1은 약 0.6 s 늦게 따라온다. 강성 25(ω = 5 rad/s)로 부드럽게 잡은 값이라서다. 빨리 따라가야 하면 강성과 Max Force를 올린다.</p>
+        <div class="chart-box"><canvas id="c-gofa" aria-label="GoFa 관절 추종 그래프"></canvas></div>
+        <div class="src" id="src-gofa"></div>
+      </div>
+      <figure class="shot"><img src="img/s04.jpg" alt="공장 장면에 놓인 GoFa" width="1280" height="720" loading="lazy"><figcaption>4단계 실행 화면. 버퍼 팔레트와 컨베이어 사이에 GoFa를 놓았다.</figcaption></figure>
+      <details class="full"><summary>step04_gofa.py 전체 코드</summary>{{code:step04_gofa.py}}</details>
+    </section>
+
+    <!-- ============================================================ 5 -->
+    <section class="step glass" id="s5" data-title="로봇을 놓고 손잡이를 잡는다">
+      <div class="step-head"><span class="step-tag">STEP 05</span><label class="done-box"><input type="checkbox" id="done-s5"> 다 했다</label></div>
+      <h2 class="title">로봇 세 대를 놓고 Articulation으로 잡는다</h2>
+      <p class="goal">장면 만드는 코드를 <code>my_scene.py</code>로 떼어 내고, KUKA·Kawasaki·AMMR을 놓는다. 그리고 내 로봇을 넣을 때 가장 먼저 하는 일, 관절·링크 이름 확인을 한다.</p>
+      <ol class="do">
+        <li><div>아래 <code>my_scene.py</code>를 저장한다. 3단계 내용에 로봇 세 대가 더해졌다. 6~8단계가 모두 이 파일을 가져다 쓴다.</div></li>
+        <li><div><code>step05_robots.py</code>를 저장하고 실행한다. 터미널에 로봇마다 <code>ROBOT</code>, <code>LINKS</code> 줄이 찍힌다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>my_scene.py 중 로봇 부분</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:my_scene.py:        # (x, y, z)는 [m]:        scene["ammr"].set_default_state}}</code></pre></div>
+      <div class="note why"><b class="lab">add()와 Articulation()의 차이</b><p><code>add()</code>는 모양을 장면에 놓기만 한다. 관절을 읽고 목표를 보내려면 <code>Articulation("/World/Kuka")</code>로 잡아야 한다. 이것이 로봇 한 대를 다루는 손잡이다.</p></div>
+      <div class="table-wrap"><table><thead><tr><th>로봇</th><th class="num">관절 수</th><th>관절 이름 (순서대로)</th></tr></thead><tbody id="dof-table"></tbody></table></div>
+      <p>손끝 링크는 <code>LINKS</code> 목록에서 고른다. 완성본은 KUKA <code>tool0</code>, Kawasaki <code>gripper_center</code>를 쓴다. 시작 자세는 팔꿈치가 굽은 자세로 정한다. 곧게 편 자세는 IK가 불안정하다.</p>
+      <figure class="shot"><img src="img/s05.jpg" alt="로봇 세 대가 놓인 장면" width="1280" height="720" loading="lazy"><figcaption>5단계 실행 화면. 시작 자세(set_default_state)로 서 있다.</figcaption></figure>
+      <details class="full"><summary>my_scene.py 전체 코드</summary>{{code:my_scene.py}}</details>
+      <details class="full"><summary>step05_robots.py 전체 코드</summary>{{code:step05_robots.py}}</details>
+    </section>
+
+    <!-- ============================================================ 6 -->
+    <section class="step glass" id="s6" data-title="관절을 움직인다">
+      <div class="step-head"><span class="step-tag">STEP 06</span><label class="done-box"><input type="checkbox" id="done-s6"> 다 했다</label></div>
+      <h2 class="title">물리 콜백에서 관절 목표를 보낸다</h2>
+      <p class="goal">로봇 제어는 "물리 한 스텝이 끝날 때마다 불리는 함수" 안에서 한다. 그 안에서 관절 목표 각도를 보내 KUKA 1축을 흔든다.</p>
+      <div class="code"><div class="bar"><span>step06_joints.py 중 핵심</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:step06_joints.py:def on_physics_step(:callback_id = SimulationManager.register_callback}}</code></pre></div>
+      <ul class="plain">
+        <li><b>set_dof_position_targets</b>는 순간이동이 아니다. 관절 구동기(PD)가 강성 kp·감쇠 kd에 따라 목표를 따라간다.</li>
+        <li><b>게인을 직접 정한다.</b> KUKA 에셋 기본 게인(5.7e16)에서는 지령 없이도 a1이 0.13 rad 흘렀다. 완성본은 <code>set_dof_gains(5.73e8, 5.73e6)</code>를 쓴다.</li>
+        <li><b>첫 스텝에서 초기화한다.</b> 재생 직후 한 번 <code>reset_to_default_state()</code>로 시작 자세를 맞춘다. 정지 후 재생할 때도 여기로 온다.</li>
+      </ul>
+      <div class="chart-card">
+        <h4>KUKA a1: 지령 vs 실제</h4>
+        <p class="sub">a1을 ±0.6 rad, 4초 주기로 흔들었다. 0.05 s마다 기록했다. 게인을 5.73e8로 세게 잡아 지령과 실제의 차이가 최대 0.012 rad다. 4단계 GoFa(강성 25)와 비교해 본다.</p>
+        <div class="chart-box"><canvas id="c-joint" aria-label="KUKA a1 추종 그래프"></canvas></div>
+        <div class="src" id="src-joint"></div>
+      </div>
+      <details class="full"><summary>step06_joints.py 전체 코드</summary>{{code:step06_joints.py}}</details>
+    </section>
+
+    <!-- ============================================================ 7 -->
+    <section class="step glass" id="s7" data-title="좌표로 움직인다 (IK)">
+      <div class="step-head"><span class="step-tag">STEP 07</span><label class="done-box"><input type="checkbox" id="done-s7"> 다 했다</label></div>
+      <h2 class="title">관절 대신 공구 끝 좌표로 움직인다</h2>
+      <p class="goal">RobotStudio처럼 "TCP를 여기로"라고 말하려면 좌표를 관절각으로 바꿔야 한다. 매 스텝 오차를 조금씩 줄이는 미분 IK로 KUKA TCP가 공중에 원을 그리게 한다.</p>
+      <div class="diagram-card">
+        <svg class="diagram" viewBox="0 0 720 150" role="img" aria-label="미분 IK 한 스텝의 흐름">
+          <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--amber)"/></marker></defs>
+          <g font-family="var(--font)" font-size="13" fill="var(--fg)" id="ikflow"></g>
+        </svg>
+      </div>
+      <div class="code"><div class="bar"><span>step07_ik.py 중 IK 한 스텝</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:step07_ik.py:def ik_step(:    return float(np.linalg.norm(target_pos - tcp_pos))}}</code></pre></div>
+      <div class="note why"><b class="lab">tooldata가 하는 일</b><p>손끝 링크(<code>tool0</code>)의 원점과 실제 공구 끝(TCP)은 다르다. <code>tooldata(x, y, z, rx, ry, rz)</code>가 링크에서 본 TCP의 위치와 방향이다. KUKA <code>tool0</code>은 +X가 공구 방향이라 y축으로 90° 돌려 TCP의 Z축을 맞췄다.</p></div>
+      <div class="grid2">
+        <div class="chart-card"><h4>TCP 경로 (위에서 본 x-y)</h4><p class="sub">목표 원(반지름 0.25 m)과 실제 TCP</p><div class="chart-box"><canvas id="c-ikxy" aria-label="IK 원 경로"></canvas></div></div>
+        <div class="chart-card"><h4>위치 오차 [mm]</h4><p class="sub">처음 수렴 구간 뒤 오차</p><div class="chart-box"><canvas id="c-ikerr" aria-label="IK 오차 그래프"></canvas></div></div>
+      </div>
+      <div class="src" id="src-ik"></div>
+      <div class="note trap"><b class="lab">함정: 지령 관절각을 따로 적분한다</b><p>IK 결과를 "실제 관절각 + 증분"으로 보내면 PD 구동 때문에 관절 속도가 kp/kd × 증분에 묶여 이동 중 1 m나 뒤처졌다. <code>state["q_cmd"]</code>처럼 지령 관절각을 따로 들고 거기에 더한다. 관절 속도 한계는 원인이 아니었다.</p></div>
+      <details class="full"><summary>step07_ik.py 전체 코드</summary>{{code:step07_ik.py}}</details>
+    </section>
+
+    <!-- ============================================================ 8 -->
+    <section class="step glass" id="s8" data-title="RAPID 스타일로 프로그램을 쓴다">
+      <div class="step-head"><span class="step-tag">STEP 08</span><label class="done-box"><input type="checkbox" id="done-s8"> 다 했다</label></div>
+      <h2 class="title">RAPID 스타일 프로그램으로 동작을 적는다</h2>
+      <p class="goal">좌표를 매 스텝 계산하는 대신 <code>MoveL p, v500, z100, tool</code>처럼 적는다. <code>rapid_style.py</code>의 <code>RapidTask</code>가 이것을 매 스텝 "지금 TCP가 있어야 할 자세"로 바꿔 준다.</p>
+      <div class="code"><div class="bar"><span>step08_rapid.py 중 프로그램</span><button class="copy" type="button">복사</button></div><pre><code>{{snippet:step08_rapid.py:# robtarget은:task = RapidTask(square_program()}}</code></pre></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>RAPID</th><th>이 파일</th><th>다른 점</th></tr></thead>
+        <tbody>
+          <tr><td><code>MoveL p, v1000, z50, t;</code></td><td><code>yield MoveL(p, v1000, z50, t)</code></td><td>길이 m, 속도 m/s. v1000 = 1.0 m/s, z50 = 0.05 m</td></tr>
+          <tr><td><code>[[x,y,z],[q],...]</code></td><td><code>robtarget(x, y, z, rx, ry, rz)</code></td><td>방향은 오일러 각 [deg]. rx = 180이 공구가 바닥을 봄</td></tr>
+          <tr><td><code>WaitUntil di1 = 1;</code></td><td><code>yield WaitUntil(함수)</code></td><td>조건은 True/False를 돌려주는 함수</td></tr>
+          <tr><td><code>SetDO do1, 1;</code></td><td><code>yield SetDO("do1", 1)</code></td><td>io 딕셔너리에 값을 쓴다</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note why"><b class="lab">yield가 낯설다면</b><p><code>yield</code>를 만나면 명령 하나를 내놓고 그 자리에서 멈춘다. <code>RapidTask</code>가 그 명령을 여러 스텝에 걸쳐 끝까지 실행한 뒤 다음 줄을 꺼낸다. RAPID에서 MoveL 한 줄이 끝나야 PP가 다음 줄로 가는 것과 같다.</p></div>
+      <div class="grid2">
+        <div class="chart-card"><h4>fine과 z100의 차이 (x-y 경로)</h4><p class="sub">p1·p4는 fine이라 모서리에 정확히 선다. p2·p3은 z100이라 목표 0.1 m 안에 들어오는 순간 다음 목표로 곧장 방향을 튼다. ABB처럼 포물선으로 둥글게 깎지 않아서 모서리를 비스듬히 자른 경로가 된다.</p><div class="chart-box tall"><canvas id="c-rxy" aria-label="사각형 경로 그래프"></canvas></div></div>
+        <div class="chart-card"><h4>지령 TCP 속도 [m/s]</h4><p class="sub">가속 4 m/s² 안에서 v500(0.5 m/s)까지 오르고, fine 앞에서 0으로 내린다</p><div class="chart-box tall"><canvas id="c-rspd" aria-label="TCP 속도 그래프"></canvas></div></div>
+      </div>
+      <div class="src" id="src-rapid"></div>
+      <figure class="shot"><img src="img/s08.jpg" alt="KUKA가 사각형 경로를 도는 장면" width="1280" height="720" loading="lazy"><figcaption>8단계 실행 화면. 이 스크립트는 KUKA만 제어한다. Kawasaki는 시작 자세를 적용하지 않아 관절이 모두 0인 곧게 선 자세다 (5단계 화면과 비교).</figcaption></figure>
+      <details class="full"><summary>step08_rapid.py 전체 코드</summary>{{code:step08_rapid.py}}</details>
+    </section>
+
+    <!-- ============================================================ 9 -->
+    <section class="step glass" id="s9" data-title="박스·센서·그리퍼 신호">
+      <div class="step-head"><span class="step-tag">STEP 09</span><label class="done-box"><input type="checkbox" id="done-s9"> 다 했다</label></div>
+      <h2 class="title">박스를 흐르게 하고 센서와 그리퍼 신호로 맞춘다</h2>
+      <p class="goal">여기부터는 완성본 코드를 읽으며 따라간다. 박스는 물리가 없는 시각용 큐브이고, 위치를 시각으로 계산한다. 로봇은 디지털 입력(박스 도착)을 기다렸다가 디지털 출력(쥐기)을 켠다.</p>
+      <ul class="plain">
+        <li><b>박스 흐름.</b> 박스는 x = −3.7에서 벨트에 올라 0.225 m/s로 흘러 24초 뒤 x = 1.7(집는 점)에 닿는다. 두 값 사이 거리가 <code>3 × TAKT × BELT_V</code> = 5.4 m가 되도록 맞췄다. <code>factory_line_demo.py</code>의 <code>box_positions_rapid()</code></li>
+        <li><b>센서 (DI).</b> <code>box_at_pick()</code>은 벨트 끝에 박스가 있으면 True. 근접 센서 하나다.</li>
+        <li><b>그리퍼 (DO).</b> <code>SetDO("doGrip", 1)</code>이 켜지면 기다리던 박스가 TCP를 따라가고, 0이 되면 그 자리에 놓인다. RG2 손가락의 물리 파지는 아니다.</li>
+      </ul>
+      <div class="code"><div class="bar"><span>rapid_controller.py의 Kawasaki 적재 프로그램</span><button class="copy" type="button">복사</button></div><pre><code>{{repo:rapid_controller.py:    slot = 0  # 이번에 놓을:        slot = (slot + 1) % 3  # 다음 칸}}</code></pre></div>
+      <div class="chart-card">
+        <h4>Kawasaki 한 택트(8.0 s) 안에서 명령이 차지하는 시간</h4>
+        <p class="sub"><code>RapidTask</code>를 실제 추종이 완벽하다고 가정하고 돌려 명령마다 시작·끝 시각을 기록했다. 박스를 놓고 돌아와도 약 2.0 s가 남아 <code>WaitUntil</code>에서 다음 박스를 기다린다.</p>
+        <div class="chart-box tall"><canvas id="c-gantt" aria-label="Kawasaki 명령별 시간 막대"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h4>같은 택트의 TCP 높이와 속도</h4>
+        <p class="sub">높이 1.12 m가 박스 윗면(집는 점), 0.493 m가 팔레트 위 박스 윗면(놓는 점)이다. v1500 구간에서 1.5 m/s까지 오른다.</p>
+        <div class="chart-box"><canvas id="c-cycle" aria-label="TCP 높이와 속도 그래프"></canvas></div>
+        <div class="src">rapid_controller.palletize_program을 rapid_style.RapidTask로 오프라인 실행 (dt 0.005 s, 2026-11-23)</div>
+      </div>
+      <div class="grid2">
+        <figure class="shot"><img src="img/pick.jpg" alt="Kawasaki가 박스를 집는 장면" width="1100" height="619" loading="lazy"><figcaption>집기. WaitUntil(box_at_pick) → SetDO doGrip 1</figcaption></figure>
+        <figure class="shot"><img src="img/place.jpg" alt="팔레트에 박스를 놓는 장면" width="1100" height="619" loading="lazy"><figcaption>놓기. 팔레트 3칸(x −0.4, 0, +0.4 m)을 차례로</figcaption></figure>
+      </div>
+    </section>
+
+    <!-- ============================================================ 10 -->
+    <section class="step glass" id="s10" data-title="걷는 로봇과 바퀴 로봇">
+      <div class="step-head"><span class="step-tag">STEP 10</span><label class="done-box"><input type="checkbox" id="done-s10"> 다 했다</label></div>
+      <h2 class="title">이동 로봇 두 대를 움직인다</h2>
+      <p class="goal">팔이 아닌 로봇은 몸 전체를 옮긴다. AMMR은 바퀴 대신 "베이스 가상 관절"로, H1은 학습된 보행 정책으로 움직인다. 둘 다 프로그램에서는 <code>MoveBase</code> 한 줄이다.</p>
+      <div class="grid2">
+        <div class="note"><b class="lab">AMMR (Ridgeback + Franka)</b><ul class="plain">
+          <li>관절 12개. 0~2가 베이스 [m] x, [m] y, [rad] 방향, 3~9가 팔 7축, 10~11이 손가락.</li>
+          <li><code>MoveBase</code>가 베이스 관절 목표를, <code>MoveAbsJ</code>가 팔 목표를 만든다. 둘 다 <code>set_dof_position_targets</code>로 보낸다.</li>
+          <li>바퀴 속도 제어는 아니다. 처음 놓은 자리(3.2, −3.0)가 베이스 관절 (0, 0)이다.</li></ul></div>
+        <div class="note"><b class="lab">H1 휴머노이드</b><ul class="plain">
+          <li><code>add()</code> 대신 <code>RobotPolicyRunner(get_h1_spec(), ...)</code>가 모델·신경망·관절 게인을 한 묶음으로 불러온다.</li>
+          <li>매 스텝 <code>h1.step(dt, [전진, 횡, 회전])</code>에 속도 명령만 준다. 관절 19개의 목표는 정책이 계산한다.</li>
+          <li>물리 간격을 정책이 학습된 0.005 s(200 Hz)로 맞춘다. 이 데모의 200 Hz가 여기서 왔다.</li></ul></div>
+      </div>
+      <div class="code"><div class="bar"><span>factory_line_demo.py 중 H1 준비</span><button class="copy" type="button">복사</button></div><pre><code>{{repo:factory_line_demo.py:h1 = RobotPolicyRunner(:RenderingManager.set_dt(8 * h1.physics_dt)}}</code></pre></div>
+      <div class="note trap"><b class="lab">함정: 정지 후 재생하면 H1이 넘어진다</b><p>타임라인을 정지하면 PhysX가 관절 게인을 USD 기본값(kp 5730)으로 되돌린다. 정지할 때 <code>h1.close()</code>를 불러 두면 다음 재생에서 학습 게인(kp 150~200)이 다시 적용된다. 완성본의 <code>frame()</code> 함수가 이 일을 한다.</p></div>
+    </section>
+
+    <!-- ============================================================ 11 -->
+    <section class="step glass" id="s11" data-title="ROS 2 노드로 떼어 낸다">
+      <div class="step-head"><span class="step-tag">STEP 11</span><label class="done-box"><input type="checkbox" id="done-s11"> 다 했다</label></div>
+      <h2 class="title">RAPID 프로그램을 ROS 2 컨트롤러 노드로 떼어 낸다</h2>
+      <p class="goal">실제 공장에서는 로봇 프로그램이 로봇 밖(컨트롤러나 외부 PC)에서 돈다. 같은 구조로 프로그램을 별도 프로세스 <code>/rapid_controller</code>로 떼고, 시뮬레이터 <code>/isaac_sim</code>과 topic·service로만 대화하게 한다.</p>
+      <div class="diagram-card wide">
+        <svg class="diagram" id="ros" viewBox="0 0 760 500" role="img" aria-label="두 노드 사이 topic과 service 목록"></svg>
+      </div>
+      <ol class="do">
+        <li><div><b>ROS 2를 따로 설치하지 않는다.</b> <code>enable_extension("isaacsim.ros2.bridge")</code>가 Isaac Sim 안의 ROS 2 Jazzy 라이브러리를 연다. 그 뒤에 <code>import rclpy</code>.</div></li>
+        <li><div><b>RMW를 FastDDS로 고정한다.</b> <code>python.bat</code> 기본값 Zenoh는 라우터를 따로 켜야 프로세스끼리 찾는다. 두 프로세스 모두 <code>RMW_IMPLEMENTATION=rmw_fastrtps_cpp</code>.</div></li>
+        <li><div><b>두 노드를 따로 띄워 본다.</b> 컨트롤러만 Ctrl+C로 끄면 로봇은 마지막 자세에서 멈추고, 다시 띄우면 프로그램이 첫 줄부터 이어 간다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>터미널 1과 터미널 2</span><button class="copy" type="button">복사</button></div><pre><code>C:\isaacsim-6.2\python.bat factory_line_demo.py --no-controller
+C:\isaacsim-6.2\python.bat rapid_controller.py</code></pre></div>
+      <h3>물리 한 스텝(0.005 s)에서 일어나는 일</h3>
+      <div class="diagram-card wide">
+        <svg class="diagram" id="seq" viewBox="0 0 760 300" role="img" aria-label="한 스텝의 순서. 상태와 clock 발행, 컨트롤러 계산, 지령 수신 대기, 적용"></svg>
+      </div>
+      <div class="chart-card">
+        <h4>답을 기다리지 않으면 무슨 일이 생기나 (2026-11-23 실측)</h4>
+        <p class="sub">받기 반복이 "메시지가 없으면 바로 멈추게" 고친 뒤 60초를 돌리자 시뮬레이션이 컨트롤러를 앞질렀다. 지령이 평균 114 ms 늦게 적용돼 두 항목이 떨어졌다. /clock에 대한 답을 최대 5 ms 기다리게 고친 뒤 다시 0.0 ms가 됐다.</p>
+        <div class="chart-box short"><canvas id="c-age" aria-label="지령 지연 114 ms에서 0.0 ms로"></canvas></div>
+      </div>
+      <div class="code"><div class="bar"><span>factory_line_demo.py 중 받기 (고친 뒤)</span><button class="copy" type="button">복사</button></div><pre><code>{{repo:factory_line_demo.py:        deadline = time.perf_counter() + 0.005:                break}}</code></pre></div>
+      <div class="note why"><b class="lab">MoveL이 ROS 2 Action이 아닌 이유</b><p>이 구조는 외부 PC가 매 주기 "지금 있어야 할 자세"를 흘려보내는 방식(ABB EGM, KUKA RSI와 같은 계열)이다. 경로를 로봇 컨트롤러가 계산하는 방식(ABB RWS로 RAPID 실행)으로 바꾸면 MoveL이 목표·진행·결과가 있는 Action이 된다. 현장에서는 후자가 더 흔하고, 비상정지·안전 영역은 항상 로봇 컨트롤러에 남긴다.</p></div>
+    </section>
+
+    <!-- ============================================================ 12 -->
+    <section class="step glass" id="s12" data-title="클릭으로 좌표를 찍는다">
+      <div class="step-head"><span class="step-tag">STEP 12</span><label class="done-box"><input type="checkbox" id="done-s12"> 다 했다</label></div>
+      <h2 class="title">물체를 클릭해서 목표 좌표를 찍는다 (티칭)</h2>
+      <p class="goal">RobotStudio에서 물체 윗면에 스냅을 걸고 타깃을 찍듯, 실행 중 물체를 클릭하면 그 윗면 가운데가 <code>robtarget</code> 한 줄로 찍힌다. 그 줄을 프로그램에 붙인다.</p>
+      <ol class="do">
+        <li><div>완성본을 실행하고 뷰포트나 Stage 창에서 팔레트를 클릭한다. 움직이는 박스는 일시정지(❚❚)한 뒤 클릭한다.</div></li>
+        <li><div>터미널과 Console 탭에 찍힌 줄을 <code>rapid_controller.py</code>의 목표 등록부에 붙인다. 찍힌 자리에는 빨간 표시가 생긴다.</div></li>
+      </ol>
+      <div class="code"><div class="bar"><span>터미널 출력</span><button class="copy" type="button">복사</button></div><pre><code>[TEACH] robtarget(3.202, -1.499, 0.143, 180.0, 0.0, 0.0)  # /World/PalletOut 윗면 가운데</code></pre></div>
+      <div class="code"><div class="bar"><span>factory_line_demo.py의 snap_top</span><button class="copy" type="button">복사</button></div><pre><code>{{repo:factory_line_demo.py:def snap_top(:    return robtarget((low[0] + high[0]) / 2}}</code></pre></div>
+      <p>찍히는 점은 바운딩 박스 윗면 중심이다. 꼭짓점·모서리 스냅은 없다. 컨트롤러 노드는 장면을 볼 수 없으므로 이 함수는 시뮬레이터 쪽에만 있다.</p>
+    </section>
+
+    <!-- ============================================================ 13 -->
+    <section class="step glass" id="s13" data-title="자체 점검으로 확인한다">
+      <div class="step-head"><span class="step-tag">STEP 13</span><label class="done-box"><input type="checkbox" id="done-s13"> 다 했다</label></div>
+      <h2 class="title">화면 대신 숫자로 확인한다</h2>
+      <p class="goal">눈으로는 "대충 잘 움직인다"까지만 보인다. 완성본은 <code>--seconds</code>를 주면 정해진 시간만 돌고 15개 항목을 숫자로 검사한다.</p>
+      <div class="code"><div class="bar"><span>PowerShell</span><button class="copy" type="button">복사</button></div><pre><code>C:\isaacsim-6.2\python.bat factory_line_demo.py --headless --seconds 60</code></pre></div>
+      <div class="chart-card">
+        <h4>한계 대비 사용률 (낮을수록 여유)</h4>
+        <p class="sub">"몇 m 미만" 항목만 모았다. 100%를 넘으면 FAIL이다. 회색은 고치기 전 1차 실행에서 떨어진 두 항목이다.</p>
+        <div class="chart-box tall"><canvas id="c-check" aria-label="자체 점검 항목별 사용률"></canvas></div>
+        <div class="src">2026-11-23 헤드리스 60초. 1차 13/15 FAIL, 수정 뒤 2차 15/15 PASS</div>
+      </div>
+      <div class="chart-card">
+        <h4>실시간 비율이 바뀐 이력</h4>
+        <p class="sub">1.0이면 실제 1초에 시뮬레이션 1초. 조건(시간·다른 작업 부하)이 실행마다 달라 추세만 본다.</p>
+        <div class="chart-box"><canvas id="c-rt" aria-label="실시간 비율 이력"></canvas></div>
+        <div class="src">저장소 log/2026-11.md와 decisions/pitfalls.md의 실측값</div>
+      </div>
+      <div class="note trap"><b class="lab">디버깅할 때 먼저 볼 것</b><ul class="plain">
+        <li>모든 계산이 고르게 느리면 수치 라이브러리 스레드부터 의심한다. <code>OMP_NUM_THREADS</code> 등 3개를 1로 두자 0.41x → 0.72x가 됐다.</li>
+        <li>성능을 손본 뒤에는 PASS 여부만 보지 말고 지령 지연(mean age)도 본다. 40초 실행은 통과하고 60초에서야 떨어진 사례가 있다.</li>
+        <li>컨트롤러 자식 프로세스는 stdin 파이프로 묶여 있어 Ctrl+C·강제 종료에도 따라 끝난다. 그래도 남은 <code>kit.exe</code>가 있으면 작업 관리자에서 끈다.</li>
+      </ul></div>
+    </section>
+
+    <section class="step glass" id="s14" data-title="내 로봇으로 바꾼다">
+      <div class="step-head"><span class="step-tag">마무리</span><label class="done-box"><input type="checkbox" id="done-s14"> 다 했다</label></div>
+      <h2 class="title">내 로봇과 내 라인으로 바꾸는 순서</h2>
+      <ol class="do">
+        <li><div><b>도면 숫자.</b> <code>line_common.py</code>의 배치 값(<code>TAKT</code>, <code>BELT_V</code>, 팔레트 좌표)을 내 셀 값으로 고친다. 두 노드가 같이 읽는다.</div></li>
+        <li><div><b>모델.</b> 4단계 방식으로 내 로봇 USD를 만들고 <code>add("E:/.../my_robot.usd", "/World/MyRobot", ...)</code>로 놓는다. 놓은 뒤 크기·높이를 잰다.</div></li>
+        <li><div><b>손잡이.</b> <code>Articulation</code>으로 잡고 관절·링크 이름을 출력해 손끝 링크와 굽은 시작 자세를 정한다.</div></li>
+        <li><div><b>공구.</b> <code>TOOLS</code>에 내 tooldata를 이름과 함께 넣는다. 지령 메시지에는 이 이름이 실려 간다.</div></li>
+        <li><div><b>통신.</b> 시뮬레이터 물리 콜백에 상태 발행 하나·지령 적용 하나를, 컨트롤러에 구독 하나·발행 하나·프로그램 하나를 더한다.</div></li>
+        <li><div><b>점검.</b> 자체 점검에 "목표를 따라가는가"와 "넘어지지 않는가"를 내 로봇 기준으로 추가하고 60초 이상 돌린다.</div></li>
+      </ol>
+      <div class="note"><b class="lab">이 학습서의 범위</b><ul class="plain">
+        <li>2~8단계 스크립트(4단계 GoFa 포함)는 2026-11-23 이 PC에서 헤드리스로 실행했고, 그래프의 수치는 그 실행 로그다.</li>
+        <li>4단계의 GUI 리깅 순서는 2026-10-25~26 실습 기록에서 왔다. GUI 조작을 이번에 다시 하지는 않았다.</li>
+        <li>9~13단계는 완성본 코드와 그 실행 결과를 읽는 단계다. 별도 단계 스크립트는 없다.</li>
+        <li>박스는 물리가 없는 시각용이고, 로봇끼리 충돌 회피는 없다. 실제 로봇으로 시험하지 않았다.</li>
+      </ul></div>
+    </section>
+
+    <footer>E:\Github\IsaacSimProcess · Isaac Sim 6.2.0 · RTX 3070 8 GB · 2026-11-23</footer>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var css = getComputedStyle(document.documentElement);
+  function v(n) { return css.getPropertyValue(n).trim(); }
+  var C = { fg: v("--fg"), muted: v("--muted"), faint: v("--faint"), line: v("--line"), amber: v("--amber"), cyan: v("--cyan"), ok: v("--ok"), bad: v("--bad"), violet: v("--violet") };
+  var D = window.LEARN_DATA || {};
+
+  // ---------- 학습 지도와 진행 체크 (이 브라우저에만 저장)
+  var steps = Array.prototype.slice.call(document.querySelectorAll("section.step"));
+  var toc = document.getElementById("toc"), tocM = document.getElementById("toc-m");
+  steps.forEach(function (s, i) {
+    var tag = s.querySelector(".step-tag").textContent.replace("STEP ", "");
+    var li = document.createElement("li");
+    li.innerHTML = '<a href="#' + s.id + '"><span class="n">' + (tag === "마무리" ? "끝" : tag) + '</span><span>' + s.dataset.title + "</span></a>";
+    toc.appendChild(li);
+    var li2 = document.createElement("li");
+    li2.innerHTML = '<a href="#' + s.id + '">' + s.dataset.title + "</a>";
+    tocM.appendChild(li2);
+  });
+  function load() { try { return JSON.parse(localStorage.getItem("isaac-learn-done") || "{}"); } catch (e) { return {}; } }
+  function save(o) { try { localStorage.setItem("isaac-learn-done", JSON.stringify(o)); } catch (e) {} }
+  var done = load();
+  function refresh() {
+    var n = 0;
+    steps.forEach(function (s, i) {
+      var on = !!done[s.id];
+      if (on) n++;
+      var a = toc.children[i].querySelector("a");
+      a.classList.toggle("done", on);
+    });
+    document.getElementById("bar").style.width = (100 * n / steps.length) + "%";
+    document.getElementById("ptext").textContent = n + " / " + steps.length + " 단계";
+  }
+  steps.forEach(function (s) {
+    var box = document.getElementById("done-" + s.id);
+    box.checked = !!done[s.id];
+    box.addEventListener("change", function () { done[s.id] = box.checked; save(done); refresh(); });
+  });
+  refresh();
+
+  // ---------- 복사 버튼
+  document.querySelectorAll("button.copy").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var code = b.closest(".code").querySelector("pre").innerText;
+      function ok() { b.textContent = "복사됨"; setTimeout(function () { b.textContent = "복사"; }, 1400); }
+      function fallback() { var r = document.createRange(); r.selectNodeContents(b.closest(".code").querySelector("pre")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Ctrl+C로 복사"; }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fallback); else fallback();
+    });
+  });
+
+  // ---------- SVG 도우미
+  var NS = "http://www.w3.org/2000/svg";
+  function el(parent, tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    parent.appendChild(e);
+    return e;
+  }
+
+  // 2단계: update 한 번 = 물리 6스텝 (측정값)
+  (function () {
+    var g = document.getElementById("ticks");
+    for (var i = 0; i < 6; i++) {
+      var x = 10 + i * 85;
+      el(g, "rect", { x: x, y: 40, width: 80, height: 44, rx: 8, fill: "rgba(242,169,59,0.13)", stroke: C.amber });
+      el(g, "text", { x: x + 40, y: 60, "text-anchor": "middle", "font-weight": "700" }, "물리 " + (i + 1));
+      el(g, "text", { x: x + 40, y: 77, "text-anchor": "middle", fill: C.muted, "font-size": "11.5" }, "0.005 s");
+    }
+  })();
+
+  // 3단계: 배치도
+  (function () {
+    var svg = document.getElementById("layout");
+    var xmin = -5.5, xmax = 5.0, ymin = -3.9, ymax = 6.9, s = 60, ox = 40, oy = 20;
+    function X(x) { return ox + (x - xmin) * s; } function Y(y) { return oy + (ymax - y) * s; }
+    var W = X(xmax) + 20, H = Y(ymin) + 20; svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    for (var gx = Math.ceil(xmin); gx <= xmax; gx++) { el(svg, "line", { x1: X(gx), y1: Y(ymax), x2: X(gx), y2: Y(ymin), stroke: C.line }); el(svg, "text", { x: X(gx), y: Y(ymin) + 15, "text-anchor": "middle", fill: C.faint, "font-size": 11, "font-family": "var(--mono)" }, gx); }
+    for (var gy = Math.ceil(ymin); gy <= ymax; gy++) { el(svg, "line", { x1: X(xmin), y1: Y(gy), x2: X(xmax), y2: Y(gy), stroke: C.line }); el(svg, "text", { x: X(xmin) - 8, y: Y(gy) + 4, "text-anchor": "end", fill: C.faint, "font-size": 11, "font-family": "var(--mono)" }, gy); }
+    el(svg, "text", { x: X(xmax) - 4, y: Y(ymin) - 6, "text-anchor": "end", fill: C.muted, "font-size": 12 }, "x [m] →");
+    el(svg, "text", { x: X(xmin) + 4, y: Y(ymax) + 14, fill: C.muted, "font-size": 12 }, "↑ y [m]");
+    var bb = D.bbox || {};
+    function rectFrom(b, fill, stroke, label, ly) {
+      el(svg, "rect", { x: X(b.x0), y: Y(b.y1), width: (b.x1 - b.x0) * s, height: (b.y1 - b.y0) * s, rx: 4, fill: fill, stroke: stroke });
+      if (label) el(svg, "text", { x: X((b.x0 + b.x1) / 2), y: Y(b.y0) + (ly || 16), "text-anchor": "middle", fill: C.fg, "font-size": 12.5 }, label);
+    }
+    var conv = bb["/World/Conveyor_1"];
+    var convAll = conv ? { x0: conv.x0 - 2, x1: conv.x1 + 2, y0: conv.y0, y1: conv.y1 } : { x0: -5, x1: 1, y0: -0.5, y1: 0.5 };
+    rectFrom(convAll, "rgba(86,198,220,0.10)", C.cyan, "컨베이어 3개 (ConveyorBelt_A05 × 3)", 18);
+    var po = bb["/World/PalletOut"] || { x0: 2.6, x1: 3.8, y0: -2.0, y1: -1.0 };
+    rectFrom(po, "rgba(242,169,59,0.12)", C.amber, "적재 팔레트", 16);
+    var pw = po.x1 - po.x0, ph = po.y1 - po.y0;
+    rectFrom({ x0: -3.0 - pw / 2, x1: -3.0 + pw / 2, y0: -1.5 - ph / 2, y1: -1.5 + ph / 2 }, "rgba(242,169,59,0.12)", C.amber, "버퍼 팔레트", 16);
+    // 박스 흐름
+    el(svg, "defs", {}).innerHTML = '<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.amber + '"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.cyan + '"/></marker><marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.violet + '"/></marker>';
+    el(svg, "line", { x1: X(-3.7), y1: Y(0), x2: X(1.7), y2: Y(0), stroke: C.amber, "stroke-width": 2.5, "marker-end": "url(#am)" });
+    el(svg, "text", { x: X(-3.7), y: Y(0) + 20, fill: C.amber, "font-size": 12 }, "박스 x −3.7 → 1.7, 0.225 m/s");
+    // KUKA 검사 구간
+    el(svg, "line", { x1: X(-1.45), y1: Y(0.25), x2: X(-0.55), y2: Y(0.25), stroke: C.ok, "stroke-width": 4 });
+    function robot(x, y, name, color, dx, dy, anchor) {
+      el(svg, "circle", { cx: X(x), cy: Y(y), r: 9, fill: color, stroke: "#0b1117", "stroke-width": 2 });
+      el(svg, "text", { x: X(x) + (dx || 0), y: Y(y) + (dy || 0), fill: C.fg, "font-size": 13, "font-weight": 700, "text-anchor": anchor || "start" }, name);
+    }
+    robot(-1.0, 2.2, "KUKA (−1.0, 2.2)", C.ok, 14, 5);
+    el(svg, "text", { x: X(-1.0), y: Y(0.25) - 8, "text-anchor": "middle", fill: C.ok, "font-size": 11.5 }, "검사 구간 0.9 m");
+    robot(3.2, 0.0, "Kawasaki (3.2, 0)", C.ok, 14, -12);
+    el(svg, "circle", { cx: X(1.7), cy: Y(0), r: 5, fill: "none", stroke: C.amber, "stroke-width": 2 });
+    el(svg, "text", { x: X(1.7), y: Y(0) + 26, "text-anchor": "middle", fill: C.amber, "font-size": 11.5 }, "집는 점");
+    // AMMR 왕복
+    el(svg, "line", { x1: X(3.2), y1: Y(-3.0), x2: X(-3.0), y2: Y(-3.0), stroke: C.cyan, "stroke-width": 2, "stroke-dasharray": "6 5", "marker-end": "url(#ac)" });
+    robot(3.2, -3.0, "AMMR (3.2, −3.0)", C.cyan, 14, 18);
+    el(svg, "text", { x: X(0), y: Y(-3.0) - 8, "text-anchor": "middle", fill: C.cyan, "font-size": 11.5 }, "적재 팔레트 ↔ 버퍼 왕복");
+    // H1 순찰
+    var wp = [[4.0, 4.4], [4.0, 6.0], [-4.0, 6.0], [-4.0, 4.4]];
+    var d = "M" + wp.map(function (p) { return X(p[0]) + " " + Y(p[1]); }).join(" L") + " Z";
+    el(svg, "path", { d: d, fill: "none", stroke: C.violet, "stroke-width": 2, "stroke-dasharray": "6 5" });
+    robot(-4.0, 4.4, "H1 순찰 시작 (−4, 4.4)", C.violet, 14, 20);
+    el(svg, "text", { x: X(0), y: Y(6.0) - 8, "text-anchor": "middle", fill: C.violet, "font-size": 11.5 }, "반시계로 4지점 순찰");
+    // GoFa (4단계)
+    el(svg, "circle", { cx: X(-0.5), cy: Y(-1.8), r: 9, fill: "none", stroke: C.fg, "stroke-width": 2, "stroke-dasharray": "3 3" });
+    el(svg, "text", { x: X(-0.5) + 14, y: Y(-1.8) + 5, fill: C.muted, "font-size": 12.5 }, "GoFa (4단계, −0.5, −1.8)");
+  })();
+
+  // 4단계: Articulation 구조
+  (function () {
+    var svg = document.getElementById("anatomy");
+    var y = 120, x0 = 30, gap = 100;
+    el(svg, "rect", { x: 10, y: y - 30, width: 30, height: 60, fill: "rgba(255,255,255,0.08)", stroke: C.line });
+    el(svg, "text", { x: 25, y: y + 50, "text-anchor": "middle", fill: C.muted, "font-size": 12 }, "월드");
+    for (var i = 0; i < 7; i++) {
+      var x = x0 + 30 + i * gap;
+      el(svg, "rect", { x: x, y: y - 22, width: 62, height: 44, rx: 10, fill: i === 0 ? "rgba(242,169,59,0.16)" : "rgba(86,198,220,0.12)", stroke: i === 0 ? C.amber : C.cyan });
+      el(svg, "text", { x: x + 31, y: y + 5, "text-anchor": "middle", fill: C.fg, "font-size": 13, "font-weight": 700, "font-family": "var(--mono)" }, "LINK0" + i);
+      var jx = i === 0 ? 50 : x - 19;
+      el(svg, "line", { x1: i === 0 ? 40 : x - 38, y1: y, x2: x, y2: y, stroke: C.line, "stroke-width": 3 });
+      el(svg, "circle", { cx: jx, cy: y, r: 8, fill: i === 0 ? C.amber : C.violet, stroke: "#0b1117", "stroke-width": 2 });
+      if (i > 0) el(svg, "text", { x: jx, y: y - 30, "text-anchor": "middle", fill: C.violet, "font-size": 11.5, "font-family": "var(--mono)" }, "joint_" + i);
+    }
+    el(svg, "text", { x: 50, y: y - 46, fill: C.amber, "font-size": 12.5 }, "Fixed Joint + Articulation Root");
+    el(svg, "text", { x: 30, y: 30, fill: C.fg, "font-size": 13 }, "링크 = Rigid Body(바깥 Xform) + Collider(Mesh)");
+    el(svg, "text", { x: 30, y: 50, fill: C.violet, "font-size": 13 }, "관절 = Revolute Joint + Angular Drive (부모 → 자식)");
+    el(svg, "text", { x: 30, y: 215, fill: C.muted, "font-size": 12.5 }, "이 네 가지가 모두 있어야 Articulation(\"경로\")으로 잡아 관절 목표를 보낼 수 있다.");
+  })();
+
+  // 7단계: IK 흐름
+  (function () {
+    var g = document.getElementById("ikflow");
+    var boxes = ["목표 TCP\n(위치·방향)", "오차 6개\n(위치 3 + 방향 3)", "자코비안 J\n(6×6)", "관절 증분 dq\n감쇠 최소제곱", "지령 관절각에\n적분 → 목표 전송"];
+    boxes.forEach(function (t, i) {
+      var x = 8 + i * 144;
+      el(g, "rect", { x: x, y: 30, width: 126, height: 64, rx: 10, fill: "rgba(255,255,255,0.05)", stroke: i === 4 ? C.amber : C.line });
+      t.split("\n").forEach(function (line, j) { el(g, "text", { x: x + 63, y: 56 + j * 18, "text-anchor": "middle", fill: j ? C.muted : C.fg, "font-size": j ? 11.5 : 13 }, line); });
+      if (i < 4) el(g, "line", { x1: x + 127, y1: 62, x2: x + 142, y2: 62, stroke: C.amber, "stroke-width": 2, "marker-end": "url(#ar2)" });
+    });
+    el(g, "text", { x: 8, y: 128, fill: C.muted, "font-size": 12.5 }, "매 물리 스텝 반복한다. 한 번에 목표까지 풀지 않고 스텝당 0.01 rad 이내로 조금씩 다가간다.");
+  })();
+
+  // 11단계: 노드와 topic
+  (function () {
+    var svg = document.getElementById("ros");
+    el(svg, "rect", { x: 10, y: 20, width: 210, height: 465, rx: 14, fill: "rgba(242,169,59,0.10)", stroke: C.amber });
+    el(svg, "text", { x: 115, y: 48, "text-anchor": "middle", fill: C.fg, "font-size": 15, "font-weight": 700, "font-family": "var(--mono)" }, "/rapid_controller");
+    ["rapid_controller.py", "RAPID 프로그램 4개", "RapidTask × 4", "Isaac Sim을 모른다"].forEach(function (t, i) { el(svg, "text", { x: 115, y: 72 + i * 20, "text-anchor": "middle", fill: C.muted, "font-size": 12.5 }, t); });
+    el(svg, "rect", { x: 540, y: 20, width: 210, height: 465, rx: 14, fill: "rgba(86,198,220,0.10)", stroke: C.cyan });
+    el(svg, "text", { x: 645, y: 48, "text-anchor": "middle", fill: C.fg, "font-size": 15, "font-weight": 700, "font-family": "var(--mono)" }, "/isaac_sim");
+    ["factory_line_demo.py", "물리·관절 구동·IK", "보행 정책·박스·센서", "RAPID를 모른다"].forEach(function (t, i) { el(svg, "text", { x: 645, y: 72 + i * 20, "text-anchor": "middle", fill: C.muted, "font-size": 12.5 }, t); });
+    var rows = [
+      ["←", "/clock", "Clock · 매 스텝 0.005 s"], ["←", "/kuka/flange_pose", "TransformStamped"], ["←", "/kawasaki/flange_pose", "TransformStamped"],
+      ["←", "/ammr/joint_states", "JointState"], ["←", "/h1/pose", "PoseStamped"], ["←", "/cell/di_box_at_pick · scan", "Bool (디지털 입력)"],
+      ["→", "/kuka · /kawasaki /tcp_command", "TransformStamped · tool 이름"], ["→", "/ammr/joint_command", "JointState"], ["→", "/h1/cmd_vel", "TwistStamped"], ["→", "/kawasaki/set_do_grip", "SetBool service (SetDO)"]
+    ];
+    rows.forEach(function (r, i) {
+      var y = 160 + i * 32, toLeft = r[0] === "←", col = toLeft ? C.cyan : C.amber;
+      el(svg, "line", { x1: toLeft ? 538 : 222, y1: y, x2: toLeft ? 224 : 536, y2: y, stroke: col, "stroke-width": 1.6, "marker-end": toLeft ? "url(#rc)" : "url(#ra)", "stroke-dasharray": i === 9 ? "5 4" : "" });
+      el(svg, "text", { x: 380, y: y - 5, "text-anchor": "middle", fill: C.fg, "font-size": 12, "font-family": "var(--mono)" }, r[1]);
+      el(svg, "text", { x: toLeft ? 530 : 230, y: y + 13, "text-anchor": toLeft ? "end" : "start", fill: C.faint, "font-size": 10.5 }, r[2]);
+    });
+    var defs = el(svg, "defs", {});
+    defs.innerHTML = '<marker id="rc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.cyan + '"/></marker><marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.amber + '"/></marker>';
+  })();
+
+  // 11단계: 한 스텝의 순서
+  (function () {
+    var svg = document.getElementById("seq");
+    var lanes = [[150, "/isaac_sim"], [610, "/rapid_controller"]];
+    lanes.forEach(function (l) {
+      el(svg, "text", { x: l[0], y: 22, "text-anchor": "middle", fill: C.fg, "font-size": 14, "font-weight": 700, "font-family": "var(--mono)" }, l[1]);
+      el(svg, "line", { x1: l[0], y1: 32, x2: l[0], y2: 290, stroke: C.line, "stroke-width": 2, "stroke-dasharray": "4 4" });
+    });
+    var defs = el(svg, "defs", {});
+    defs.innerHTML = '<marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.amber + '"/></marker><marker id="sc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="' + C.cyan + '"/></marker>';
+    function box(x, y, w, t, col) { el(svg, "rect", { x: x - w / 2, y: y, width: w, height: 34, rx: 8, fill: "rgba(255,255,255,0.06)", stroke: col }); el(svg, "text", { x: x, y: y + 22, "text-anchor": "middle", fill: C.fg, "font-size": 12.5 }, t); }
+    box(150, 44, 250, "① 실제 자세·센서 발행, 마지막에 /clock", C.cyan);
+    el(svg, "line", { x1: 276, y1: 70, x2: 484, y2: 96, stroke: C.cyan, "stroke-width": 2, "marker-end": "url(#sc)" });
+    el(svg, "text", { x: 380, y: 76, "text-anchor": "middle", fill: C.cyan, "font-size": 12 }, "/clock, flange_pose …");
+    box(610, 96, 250, "② RapidTask.step(dt) × 4 → 지령 발행", C.amber);
+    el(svg, "line", { x1: 484, y1: 140, x2: 276, y2: 172, stroke: C.amber, "stroke-width": 2, "marker-end": "url(#sa)" });
+    el(svg, "text", { x: 380, y: 148, "text-anchor": "middle", fill: C.amber, "font-size": 12 }, "tcp_command (같은 stamp)");
+    box(150, 172, 250, "③ 답 도착까지 최대 5 ms spin_once", C.ok);
+    box(150, 226, 250, "④ IK·관절 목표·보행 정책 적용", C.cyan);
+    el(svg, "text", { x: 300, y: 284, fill: C.muted, "font-size": 12 }, "fine은 컨트롤러가 받은 실제 TCP가 목표 5 mm 안이어야 다음 줄로 간다.");
+  })();
+
+  // ---------- 차트
+  if (!window.Chart) { document.querySelectorAll("canvas").forEach(function (c) { var p = document.createElement("p"); p.className = "sub"; p.textContent = "차트 라이브러리를 불러오지 못했다. 인터넷 연결을 확인한다."; c.replaceWith(p); }); return; }
+  Chart.defaults.color = C.muted;
+  Chart.defaults.borderColor = C.line;
+  Chart.defaults.font.family = css.getPropertyValue("--font");
+  Chart.defaults.font.size = 12;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.animation = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 500 };
+  Chart.defaults.plugins.legend.labels.boxWidth = 14;
+  Chart.defaults.elements.point.radius = 0;
+  function make(id, cfg) { var c = document.getElementById(id); if (c) new Chart(c, cfg); }
+  function xy(rows, i, j, k) { return rows.map(function (r) { return { x: r[i], y: k ? r[j] * k : r[j] }; }); }
+  function axis(title, extra) { var o = { title: { display: true, text: title }, grid: { color: C.line } }; for (var k in extra || {}) o[k] = extra[k]; return o; }
+  function src(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+
+  make("c-load", { type: "bar", data: { labels: ["첫 실행 (에셋 다운로드)", "두 번째부터 (캐시)"], datasets: [{ data: [720, 30], backgroundColor: [C.amber, C.cyan], borderRadius: 6 }] },
+    options: { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return c.raw >= 60 ? "약 " + c.raw / 60 + "분" : "약 " + c.raw + "초"; } } } }, scales: { x: axis("뜰 때까지 걸린 시간 [s]"), y: { grid: { display: false } } } } });
+
+  if (D.fall) {
+    var theory = []; for (var t = 0; t <= 1.4; t += 0.02) theory.push({ x: +t.toFixed(2), y: Math.max(0.15, 2.0 - 0.5 * 9.81 * t * t) });
+    make("c-fall", { type: "line", data: { datasets: [
+      { label: "계산 (자유낙하, 바닥 0.15 m)", data: theory, borderColor: C.faint, borderDash: [6, 5], borderWidth: 2 },
+      { label: "시뮬레이션", data: xy(D.fall, 0, 1), borderColor: C.amber, backgroundColor: C.amber, showLine: false, pointRadius: 3.5 } ] },
+      options: { parsing: false, scales: { x: axis("시각 [s]", { type: "linear", min: 0, max: 1.4 }), y: axis("상자 중심 높이 [m]", { min: 0, max: 2.1 }) } } });
+    src("src-fall", "step02_physics.py --headless --frames 45 실행 로그 (2026-11-23). 계산이 바닥에 닿는 0.614 s와 시뮬레이션 0.60 s가 맞는다");
+  }
+  make("c-drive", { type: "bar", data: { labels: ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"], datasets: [
+      { label: "Max Force", data: [10, 200, 50, 10, 40, 10], backgroundColor: C.amber, borderRadius: 5, yAxisID: "y" },
+      { label: "Stiffness", data: [25, 100, 100, 100, 100, 100], backgroundColor: C.cyan, borderRadius: 5, yAxisID: "y" },
+      { label: "Damping", data: [10, 20, 20, 20, 20, 20], backgroundColor: C.violet, borderRadius: 5, yAxisID: "y" } ] },
+    options: { scales: { y: axis("값 (UI 단위)"), x: { grid: { display: false } } } } });
+  make("c-repair", { type: "bar", data: { labels: ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"], datasets: [
+      { label: "수리 전", data: [0.2835, 0.4007, 35.0943, 0.0295, 0.3902, 0.0007], backgroundColor: C.bad, borderRadius: 5 },
+      { label: "수리 후", data: [0, 0, 0, 0, 0, 0], backgroundColor: C.ok, borderRadius: 5, minBarLength: 3 } ] },
+    options: { scales: { y: axis("마지막 1초 진동 폭 [deg]"), x: { grid: { display: false } } } } });
+  if (D.gofa) {
+    make("c-gofa", { type: "line", data: { datasets: [
+      { label: "joint_1 목표", data: xy(D.gofa, 0, 1), borderColor: C.faint, borderDash: [6, 5], borderWidth: 2 },
+      { label: "joint_1 실제", data: xy(D.gofa, 0, 2), borderColor: C.amber, borderWidth: 2.5 },
+      { label: "joint_2 목표", data: xy(D.gofa, 0, 3), borderColor: C.faint, borderDash: [2, 4], borderWidth: 2 },
+      { label: "joint_2 실제", data: xy(D.gofa, 0, 4), borderColor: C.cyan, borderWidth: 2.5 } ] },
+      options: { parsing: false, scales: { x: axis("시각 [s]", { type: "linear" }), y: axis("관절각 [rad]") } } });
+    src("src-gofa", "step04_gofa.py --headless --frames 300 실행 로그 (2026-11-23)");
+  }
+  if (D.joint) {
+    make("c-joint", { type: "line", data: { datasets: [
+      { label: "지령 a1", data: xy(D.joint, 0, 1), borderColor: C.faint, borderDash: [6, 5], borderWidth: 2 },
+      { label: "실제 a1", data: xy(D.joint, 0, 2), borderColor: C.amber, borderWidth: 2.5 } ] },
+      options: { parsing: false, scales: { x: axis("시각 [s]", { type: "linear" }), y: axis("관절각 [rad]") } } });
+    src("src-joint", "step06_joints.py --headless --frames 250 실행 로그 (2026-11-23)");
+  }
+  if (D.ik) {
+    var circ = []; for (var a = 0; a <= 360; a += 6) circ.push({ x: -1.0 + 0.25 * Math.cos(a * Math.PI / 180), y: 0.7 + 0.25 * Math.sin(a * Math.PI / 180) });
+    make("c-ikxy", { type: "scatter", data: { datasets: [
+      { label: "목표 원", data: circ, showLine: true, borderColor: C.fg, borderDash: [6, 5], borderWidth: 1.5, order: 1 },
+      { label: "실제 TCP (굵은 선)", data: D.ikxy || [], showLine: true, borderColor: "rgba(242,169,59,0.6)", borderWidth: 6, order: 2 } ] },
+      options: { scales: { x: axis("x [m]", { min: -1.4, max: -0.6 }), y: axis("y [m]", { min: 0.3, max: 1.1 }) } } });
+    make("c-ikerr", { type: "line", data: { datasets: [{ label: "|목표 − 실제 TCP|", data: xy(D.ik, 0, 1, 1000), borderColor: C.cyan, borderWidth: 2 }] },
+      options: { parsing: false, plugins: { legend: { display: false } }, scales: { x: axis("시각 [s]", { type: "linear" }), y: axis("오차 [mm]", { type: "logarithmic" }) } } });
+    src("src-ik", "step07_ik.py --headless --frames 300 실행 로그 (2026-11-23). 0.05 s마다 기록");
+  }
+  if (D.rapid) {
+    var sq = [[-1.25, 0.45], [-0.75, 0.45], [-0.75, 0.95], [-1.25, 0.95], [-1.25, 0.45]].map(function (p) { return { x: p[0], y: p[1] }; });
+    make("c-rxy", { type: "scatter", data: { datasets: [
+      { label: "p1→p2→p3→p4 직선", data: sq, showLine: true, borderColor: C.faint, borderDash: [6, 5], borderWidth: 1.5 },
+      { label: "지령 TCP", data: xy(D.rapid, 1, 2), showLine: true, borderColor: C.amber, borderWidth: 1.5, order: 1 },
+      { label: "실제 TCP (굵은 선)", data: xy(D.rapid, 3, 4), showLine: true, borderColor: "rgba(86,198,220,0.55)", borderWidth: 6, order: 2 } ] },
+      options: { scales: { x: axis("x [m]", { min: -1.4, max: -0.6 }), y: axis("y [m]", { min: 0.3, max: 1.1 }) } } });
+    make("c-rspd", { type: "line", data: { datasets: [{ label: "지령 속도", data: xy(D.rapid, 0, 5), borderColor: C.amber, borderWidth: 2, stepped: false }] },
+      options: { parsing: false, plugins: { legend: { display: false } }, scales: { x: axis("시각 [s]", { type: "linear" }), y: axis("속도 [m/s]", { min: 0, max: 0.6 }) } } });
+    src("src-rapid", "step08_rapid.py --headless --frames 350 실행 로그 (2026-11-23)");
+  }
+  // 9단계: Kawasaki 한 택트
+  (function () {
+    var names = ["들어 올림 v1000 z50", "놓을 칸 60 cm 위 v1500 z50", "놓을 칸 v1000 fine", "SetDO 0 + WaitTime 0.3", "빈손 올림 v1000 z50", "집는 점 45 cm 위 v1500 z50", "집는 점 v1000 fine", "WaitUntil 박스 도착", "SetDO 1 + WaitTime 0.3"];
+    var spans = [[0.3, 0.825], [0.825, 2.26], [2.26, 2.985], [2.985, 3.285], [3.285, 3.96], [3.96, 5.405], [5.405, 5.96], [5.96, 7.995], [0.0, 0.3]];
+    var cols = [C.amber, C.amber, C.amber, C.violet, C.cyan, C.cyan, C.cyan, C.faint, C.violet];
+    make("c-gantt", { type: "bar", data: { labels: names, datasets: [{ data: spans, backgroundColor: cols, borderRadius: 4, barPercentage: 0.7 }] },
+      options: { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { var r = c.raw; return r[0].toFixed(2) + " ~ " + r[1].toFixed(2) + " s (" + (r[1] - r[0]).toFixed(2) + " s)"; } } } },
+        scales: { x: axis("택트 안 시각 [s] (박스를 쥔 순간 = 0)", { min: 0, max: 8 }), y: { grid: { display: false } } } } });
+    var cyc = D.cycle || [];
+    make("c-cycle", { type: "line", data: { datasets: [
+      { label: "TCP 높이 [m]", data: xy(cyc, 0, 2), borderColor: C.amber, borderWidth: 2.5, yAxisID: "y" },
+      { label: "TCP 속도 [m/s]", data: xy(cyc, 0, 1), borderColor: C.cyan, borderWidth: 2, yAxisID: "y1" } ] },
+      options: { parsing: false, scales: { x: axis("택트 안 시각 [s]", { type: "linear", min: 0, max: 8 }), y: axis("높이 [m]", { min: 0, max: 1.8 }), y1: axis("속도 [m/s]", { position: "right", min: 0, max: 1.8, grid: { display: false } }) } } });
+  })();
+  make("c-age", { type: "bar", data: { labels: ["고치기 전 (60초, 2026-11-23 1차)", "고친 뒤 (60초, 2차)", "기준 (40초, 2026-11-17)"], datasets: [{ data: [114.0, 0.0, 0.0], backgroundColor: [C.bad, C.ok, C.faint], borderRadius: 6, minBarLength: 4 }] },
+    options: { indexAxis: "y", plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return "평균 지령 지연 " + c.raw.toFixed(1) + " ms"; } } } }, scales: { x: axis("평균 지령 지연 [ms]"), y: { grid: { display: false } } } } });
+  make("c-check", { type: "bar", data: { labels: ["KUKA 손끝 평균 오차 < 0.03 m", "Kawasaki 손끝 평균 오차 < 0.03 m", "AMMR 경로 지연 < 0.3 m", "팔레트 칸 위치 < 0.01 m", "KUKA 검사 중 x 어긋남 < 0.03 m", "재생 뒤 두 팔 오차 < 0.03 m", "클릭 티칭 위치 < 0.01 m"], datasets: [
+      { label: "고친 뒤 (15/15 PASS)", data: [17.3, 44.7, 34.3, 23.0, 31.7, 29.0, 20.0], backgroundColor: C.ok, borderRadius: 5 },
+      { label: "고치기 전 (FAIL 항목)", data: [null, 158.0, null, null, 191.3, null, null], backgroundColor: "rgba(163,180,193,0.55)", borderRadius: 5 } ] },
+    options: { indexAxis: "y", plugins: { tooltip: { callbacks: { label: function (c) { return c.dataset.label + ": 한계의 " + c.raw + "%"; } } } }, scales: { x: axis("한계 대비 [%]", { min: 0, max: 200 }), y: { grid: { display: false }, ticks: { font: { size: 11.5 } } } } } });
+  make("c-rt", { type: "bar", data: { labels: ["11-13 스레드 제한 전", "11-13 스레드 1개로", "11-17 ROS 2 분리", "11-22 빈 spin 반복", "11-22 빈 spin 조기 종료", "11-23 답 기다림 (60초)"], datasets: [{ data: [0.41, 0.72, 0.37, 0.36, 0.45, 0.57], backgroundColor: [C.faint, C.ok, C.cyan, C.bad, C.cyan, C.amber], borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: axis("실시간 비율 [배]", { min: 0, max: 1 }), x: { grid: { display: false }, ticks: { font: { size: 11 } } } } } });
+})();
+</script>

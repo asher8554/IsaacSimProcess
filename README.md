@@ -30,6 +30,7 @@ AMMR은 목표 거리·속도와 실제 도착에 따라 왕복한다.
 | `rapid_style.py` | `robtarget`·`MoveL` 등 RAPID 스타일 데이터·명령과 실행기 `RapidTask`. numpy·scipy만 쓴다 |
 | `tests/test_box_signals.py` | 박스 신호·파지·초기 배치 단위 테스트 |
 | `tests/test_rapid_controller.py` | 컨트롤러 노드의 메시지 변환·재시작·지령 모양 단위 테스트 |
+| `learn/` | 빈 Isaac Sim에서 이 데모까지 14단계로 따라 하는 HTML 학습서. `learn/index.html`을 브라우저로 연다 ([learn/README.md](learn/README.md)) |
 | `WORK_PC_PROMPT.md` | 다른 PC에서 에이전트에게 이 방식으로 이어서 작업시키는 인계 프롬프트 |
 | `docs/rapid-execution-plan.md` | RAPID 방식 적용 계획 기록 |
 | `STATUS.md`, `checklist.md` | 지금 상태와 열린 할 일 |

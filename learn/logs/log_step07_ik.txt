@@ -1,0 +1,549 @@
+[carb] Visual C++ runtime version 14.29.30156.0 is older than build version 14.38.33145.0. Please update the Visual C++ runtime.
+2026-11-23T12:23:10Z [Info] [carb] Logging to file: c:/isaacsim-6.2/kit/logs/Kit/Isaac-Sim Python/6.2/kit_20261123_212310.log
+[0.140s] [ext: omni.assets.plugins-0.0.0] startup
+[0.144s] [ext: omni.blobkey-1.1.2] startup
+[0.144s] [ext: omni.kit.async_engine-0.0.5] startup
+[0.659s] [ext: omni.client.lib-1.1.1] startup
+[0.675s] [ext: omni.client-1.3.0] startup
+[0.736s] [ext: omni.protobuf.lib-1.0.1] startup
+[0.737s] [ext: omni.grpc.lib-1.0.1] startup
+[0.738s] [ext: omni.metrics.core-0.0.3] startup
+[0.739s] [ext: omni.datastore-0.0.0] startup
+[0.741s] [ext: omni.gpu_foundation.shadercache.vulkan-1.0.0] startup
+[0.748s] [ext: omni.hsscclient-1.1.4] startup
+[0.749s] [ext: omni.stats-1.0.1] startup
+[0.751s] [ext: omni.ujitso.default-1.0.0] startup
+[0.761s] [ext: omni.gpu_foundation-0.0.0] startup
+[0.784s] [ext: carb.windowing.plugins-1.0.1] startup
+[0.786s] [ext: omni.kit.renderer.init-1.0.1] startup
+[0.787s] [ext: omni.kit.pipapi-0.0.0] startup
+[0.789s] [ext: omni.kit.pip_archive-0.0.0] startup
+[0.789s] [ext: isaacsim.pip.newton-0.12.1] startup
+[0.792s] [ext: isaacsim.pip.onnx-1.0.1] startup
+[0.792s] [ext: omni.pip.compute-1.9.7] startup
+[0.794s] [ext: omni.isaac.core_archive-5.4.1] startup
+[0.795s] [ext: omni.kit.telemetry-0.5.2] startup
+[0.809s] [ext: omni.kit.loop-isaac-1.6.2] startup
+[0.813s] [ext: omni.kit.test-2.2.3] startup
+[0.918s] [ext: omni.materialx.libs-1.0.9] startup
+[0.933s] [ext: omni.gpucompute.plugins-0.0.0] startup
+[0.935s] [ext: omni.usd.config-1.0.8] startup
+[0.942s] [ext: omni.usd.libs-1.0.3] startup
+[1.019s] [ext: omni.iray.libs-0.0.1] startup
+[1.053s] [ext: omni.mdl-57.0.6] startup
+[1.129s] [ext: omni.mdl.neuraylib-0.2.23] startup
+[1.134s] [ext: omni.kit.usd.mdl-1.1.12] startup
+2026-11-23T12:23:11Z [1,148ms] [Warning] [omni.rtx] Skipping unsupported non-NVIDIA GPU: Intel(R) UHD Graphics 770
+2026-11-23T12:23:11Z [1,149ms] [Warning] [omni.rtx] Skipping unsupported non-NVIDIA GPU: Intel(R) UHD Graphics 770
+[1.304s] [ext: omni.appwindow-1.2.2] startup
+[1.309s] [ext: omni.kit.renderer.core-1.3.2] startup
+[1.321s] [ext: omni.kit.renderer.capture-2.0.2] startup
+[1.326s] [ext: omni.kit.renderer.imgui-2.2.1] startup
+[1.338s] [ext: omni.ui-3.3.10] startup
+[1.352s] [ext: omni.kit.mainwindow-1.0.4] startup
+[1.353s] [ext: carb.audio-0.1.0] startup
+[1.355s] [ext: omni.uiaudio-1.0.0] startup
+[1.357s] [ext: omni.kit.uiapp-0.0.0] startup
+[1.357s] [ext: omni.usd.schema.metrics.assembler-110.1.1] startup
+[1.366s] [ext: omni.usd.schema.audio-0.0.1] startup
+[1.373s] [ext: omni.usd_resolver-1.0.0] startup
+[1.382s] [ext: omni.usd.core-1.10.42] startup
+[1.386s] [ext: omni.metropolis.schema-0.0.3] startup
+[1.387s] [ext: isaacsim.anim.robot.schema-0.1.1] startup
+[1.388s] [ext: isaacsim.common-6.2.0] startup
+[1.391s] [ext: omni.usd.schema.anim-0.0.1] startup
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 610.60        | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA GeForce RTX 3070          | Yes: 0 |     | 8018    MB | 10de      | a13a0100.. |
+|     |                                  |        |     |            | 2488      | 426b0e26.. |
+|     |                                  |        |     |            | 1         |            |
+|---------------------------------------------------------------------------------------------|
+| 1   | Intel(R) UHD Graphics 770        |        |     | 16228   MB | 8086      | 754f0100.. |
+|     |                                  |        |     |            | 4680      | 86808046.. |
+|     |                                  |        |     |            | N/A       |        Warning: Possible version incompatibility. Attempting to load carb::ujitso::IFactory with version v0.3 against v0.2.
+    |
+|=============================================================================================|
+| OS: Windows 11 Pro, Version: 10.0 (26H2), Build: 26300, Kernel: 10.0.26100.9974
+| Processor: 12th Gen Intel(R) Core(TM) i7-12700
+| Cores: 12 | Logical Cores: 20
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 32456 | Free Memory: 10404
+| Total Page/Swap (MB): 85704 | Free Page/Swap: 46010
+|---------------------------------------------------------------------------------------------|
+[1.421s] [ext: omni.usd.schema.geospatial-0.0.1] startup
+[1.427s] [ext: omni.usd.schema.omnigraph-1.0.1] startup
+[1.437s] [ext: omni.usd.schema.semantics-0.0.0] startup
+[1.444s] [ext: omni.activity.core-1.0.4] startup
+[1.447s] [ext: omni.cubric-0.1.0] startup
+[1.449s] [ext: omni.graph.exec-0.9.6] startup
+[1.450s] [ext: omni.hydra.scene_delegate-0.3.5] startup
+[1.455s] [ext: usdrt.scenegraph-7.6.3] startup
+[1.510s] [ext: omni.hydra.usdrt_delegate-7.5.2] startup
+[1.520s] [ext: omni.inspect-1.0.2] startup
+[1.523s] [ext: omni.kit.actions.core-1.2.1] startup
+[1.528s] [ext: omni.kit.audiodeviceenum-1.0.2] startup
+[1.532s] [ext: omni.kit.commands-1.6.2] startup
+[1.539s] [ext: omni.kit.exec.core-0.13.6] startup
+[1.543s] [ext: omni.kit.usd_undo-0.1.8] startup
+[1.543s] [ext: omni.kit.window.popup_dialog-2.0.26] startup
+[1.549s] [ext: omni.kit.widget.connection_manager-1.0.4] startup
+[1.559s] [ext: omni.timeline-1.1.2] startup
+[1.564s] [ext: omni.usd-1.19.11] startup
+[1.621s] [ext: omni.graph.core-3.1.8] startup
+[1.625s] [ext: omni.kit.notification_manager-1.0.17] startup
+[1.628s] [ext: isaacsim.core.deprecation_manager-0.4.5] startup
+[1.630s] [ext: isaacsim.replicator.agent.schema-0.1.2] startup
+[1.631s] [ext: isaacsim.robot.schema-7.0.2] startup
+[1.639s] [ext: isaacsim.robot_motion.schema-0.2.2] startup
+[1.641s] [ext: omni.anim.behavior.schema-110.4.0] startup
+[1.643s] [ext: omni.anim.graph.schema-110.4.0] startup
+[1.644s] [ext: omni.anim.navigation.schema-110.4.0] startup
+[1.646s] [ext: omni.behavior.tree.schema-110.4.0] startup
+[1.647s] [ext: omni.isaac.ml_archive-3.4.0] startup
+[1.647s] [ext: omni.kit.asset_converter-6.1.0] startup
+[1.657s] [ext: omni.pip.cloud-1.5.7] startup
+[1.660s] [ext: omni.usd.schema.flow-110.0.0] startup
+[1.661s] [ext: omni.usd.schema.newton-1.5.0] startup
+[1.663s] [ext: omni.usd.schema.mujoco-1.1.4] startup
+[1.664s] [ext: omni.usd.schema.omni_dome_light-1.0.0] startup
+[1.665s] [ext: omni.usd.schema.omni_lens_distortion-1.0.0] startup
+[1.666s] [ext: omni.usd.schema.omni_projectors-1.0.0] startup
+[1.667s] [ext: omni.usd.schema.omni_sensors-0.0.0] startup
+[1.678s] [ext: omni.usd.schema.omniscripting-1.0.1] startup
+[1.685s] [ext: omni.usd.schema.physical_lighting-0.1.0] startup
+[1.691s] [ext: omni.usd.schema.physx-110.4.4] startup
+[1.720s] [ext: omni.usd.schema.render_settings.rtx-1.0.3] startup
+[1.728s] [ext: omni.usd.schema.usd_particle_field-1.0.0] startup
+[1.729s] [ext: omni.kit.menu.core-1.3.0] startup
+[1.730s] [ext: omni.kit.menu.utils-2.2.8] startup
+[1.740s] [ext: omni.kit.usd.layers-2.7.9] startup
+[1.750s] [ext: omni.kit.primitive.mesh-1.1.1] startup
+[1.755s] [ext: omni.kit.stage_template.core-1.1.23] startup
+[1.756s] [ext: omni.kit.stage_templates-2.0.3] startup
+[1.759s] [ext: omni.usd.metrics.assembler-110.1.2] startup
+[1.763s] [ext: omni.warp.core-1.17.0] startup
+[1.974s] [ext: isaacsim.core.experimental.utils-0.23.3] startup
+[1.977s] [ext: omni.convexdecomposition-110.4.4] startup
+[1.981s] [ext: omni.physics-110.4.4] startup
+[1.986s] [ext: omni.physx.gpu-110.4.4] startup
+[1.987s] [ext: omni.physx.foundation-110.4.4] startup
+[2.000s] [ext: omni.usdphysics-110.4.4] startup
+[2.002s] [ext: omni.physx.cooking-110.4.4] startup
+[2.006s] [ext: omni.physx-110.4.4] startup
+[2.020s] [ext: omni.physics.physx-110.4.4] startup
+[2.023s] [ext: omni.physics.stageupdate-110.4.4] startup
+[2.027s] [ext: omni.physics.tensors-110.4.4] startup
+[2.034s] [ext: omni.physx.tensors-110.4.4] startup
+[2.038s] [ext: omni.usdex.libs-3.0.0] startup
+[2.047s] [ext: isaacsim.core.simulation_manager-1.17.4] startup
+[2.065s] [ext: isaacsim.test.docstring-1.3.2] startup
+[2.073s] [ext: isaacsim.core.experimental.prims-1.12.1] startup
+[2.360s] [ext: isaacsim.core.experimental.primdata-0.3.6] startup
+[2.362s] [ext: omni.kit.clipboard-1.1.1] startup
+[2.364s] [ext: omni.kit.widget.context_menu-1.5.0] startup
+[2.367s] [ext: omni.kit.context_menu-1.10.0] startup
+[2.369s] [ext: omni.kit.helper.file_utils-0.1.10] startup
+[2.371s] [ext: omni.kit.widget.nucleus_info-2.0.2] startup
+[2.373s] [ext: omni.kit.search_core-1.0.8] startup
+[2.374s] [ext: omni.kit.widget.path_field-2.0.14] startup
+[2.376s] [ext: omni.kit.widget.browser_bar-2.0.11] startup
+[2.377s] [ext: omni.kit.widget.filebrowser-2.14.5] startup
+[2.384s] [ext: omni.kit.widget.nucleus_connector-2.4.0] startup
+[2.385s] [ext: omni.kit.widget.options_menu-1.1.7] startup
+[2.390s] [ext: omni.kit.widget.options_button-1.0.3] startup
+[2.391s] [ext: omni.kit.widget.search_delegate-1.0.10] startup
+[2.393s] [ext: omni.ui.scene-2.1.1] startup
+[2.400s] [ext: omni.kit.window.filepicker-3.0.18] startup
+[2.428s] [ext: omni.kit.window.file_importer-1.1.22] startup
+[2.432s] [ext: omni.kit.material.library-3.1.8] startup
+[2.440s] [ext: isaacsim.core.experimental.materials-0.11.1] startup
+[2.445s] [ext: isaacsim.core.experimental.objects-0.9.1] startup
+[2.538s] [ext: isaacsim.robot_motion.experimental.motion_generation-7.2.0] startup
+[2.564s] [ext: isaacsim.robot_motion.controllers-0.4.0] startup
+[2.578s] [ext: isaacsim.robot_motion.cumotion-1.5.0] startup
+[2.596s] [ext: isaacsim.core.version-2.2.1] startup
+[2.601s] [ext: isaacsim.app.about-2.3.2] startup
+[2.609s] [ext: isaacsim.asset.transformer-6.2.1] startup
+[2.614s] [ext: omni.scene.optimizer.core-110.3.1] startup
+[2.664s] [ext: isaacsim.asset.importer.utils-1.9.1] startup
+[2.670s] [ext: isaacsim.asset.exporter.urdf-2.2.10] startup
+[2.683s] [ext: isaacsim.asset.transformer.rules-1.7.25] startup
+[2.701s] [ext: isaacsim.asset.importer.mjcf-3.13.0] startup
+[2.704s] [ext: isaacsim.asset.importer.urdf-3.11.12] startup
+[2.712s] [ext: isaacsim.storage.native-1.12.2] startup
+[2.715s] [ext: omni.usd.metrics.assembler.physics-110.4.4] startup
+[2.717s] [ext: isaacsim.core.utils-4.1.9] startup
+[2.721s] [ext: isaacsim.core.prims-0.11.7] startup
+[5.795s] [ext: isaacsim.core.api-5.3.2] startup
+[5.824s] [ext: isaacsim.core.cloner-1.7.6] startup
+[5.829s] [ext: omni.graph.tools-1.81.0] startup
+[5.901s] [ext: omni.graph-1.142.6] startup
+[5.999s] [ext: isaacsim.core.experimental.actuators-0.2.1] startup
+[6.064s] [ext: omni.hydra.engine.stats-1.0.5] startup
+[6.069s] [ext: omni.hydra.rtx.shadercache.vulkan-1.0.0] startup
+[6.073s] [ext: omni.index.libs-392300.2120.0] startup
+[6.073s] [ext: omni.index-1.0.1] startup
+[6.075s] [ext: omni.ujitso.client-0.0.0] startup
+[6.077s] [ext: omni.usd.schema.playback-1.1.0] startup
+[6.079s] [ext: omni.volume-0.5.2] startup
+[6.086s] [ext: omni.hydra.rtx-1.0.5] startup
+[6.149s] [ext: omni.kit.hydra_texture-1.6.2] startup
+[6.155s] [ext: omni.kit.raycast.query-1.2.0] startup
+[6.161s] [ext: omni.kit.viewport.legacy_gizmos-1.0.24] startup
+[6.165s] [ext: omni.kit.viewport.registry-104.0.6] startup
+[6.167s] [ext: omni.kit.viewport.scene_camera_model-1.0.7] startup
+[6.172s] [ext: omni.kit.widget.viewport-110.0.1] startup
+[6.186s] [ext: omni.kit.window.drop_support-1.0.8] startup
+[6.188s] [ext: omni.kit.viewport.window-110.0.5] startup
+[6.561s] [ext: omni.kit.viewport.utility-2.1.2] startup
+[6.564s] [ext: isaacsim.core.rendering_manager-0.5.3] startup
+[6.572s] [ext: omni.graph.action_core-1.1.9] startup
+[6.579s] [ext: omni.graph.action_nodes_core-2.11.0] startup
+[6.586s] [ext: omni.graph.action_nodes-2.11.0] startup
+[6.662s] [ext: omni.graph.action-2.10.2] startup
+[6.666s] [ext: omni.graph.image.core-0.6.1] startup
+[6.673s] [ext: omni.graph.image.nodes-1.3.2] startup
+[6.675s] [ext: omni.graph.nodes_core-2.11.0] startup
+[6.690s] [ext: omni.graph.nodes-2.12.1] startup
+[6.705s] [ext: omni.kit.hotkeys.core-1.6.1] startup
+[6.707s] [ext: omni.kit.property.adapter.core-1.1.1] startup
+[6.715s] [ext: omni.kit.property.adapter.usd-1.0.6] startup
+[6.719s] [ext: omni.kit.widget.filter-1.1.9] startup
+[6.722s] [ext: omni.kit.widget.highlight_label-1.0.3] startup
+[6.724s] [ext: omni.kit.widget.searchfield-1.1.8] startup
+[6.728s] [ext: omni.kit.window.file_exporter-1.0.38] startup
+[6.733s] [ext: omni.kit.widget.stage-4.7.2] startup
+[6.762s] [ext: omni.kit.window.content_browser_registry-0.0.6] startup
+[6.765s] [ext: omni.kit.window.file-2.0.17] startup
+[6.777s] [ext: omni.kit.window.content_browser-3.1.14] startup
+[6.800s] [ext: omni.kit.window.property-1.15.2] startup
+[6.849s] [ext: omni.kit.property.usd-4.9.18] startup
+[6.879s] [ext: omni.graph.scriptnode-2.10.2] startup
+[6.917s] [ext: omni.kit.widget.searchable_combobox-1.0.7] startup
+[6.921s] [ext: omni.kit.widget.settings-2.0.1] startup
+[6.928s] [ext: omni.kit.window.preferences-1.8.5] startup
+[6.946s] [ext: omni.kit.viewport.menubar.core-110.0.4] startup
+[6.990s] [ext: omni.syntheticdata-0.6.17] startup
+[7.080s] [ext: omni.replicator.nv-1.1.7] startup
+[7.103s] [ext: omni.videoencoding-0.2.1] startup
+[7.113s] [ext: omni.replicator.core-1.13.38] startup
+2026-11-23T12:23:17Z [7,063ms] [Warning] [pxr.Semantics] pxr.Semantics is deprecated - please use Semantics instead
+2026-11-23T12:23:17Z [7,226ms] [Warning] [omni.replicator.core.scripts.extension] No material configuration file, adding configuration to material settings directly.
+[7.759s] [ext: isaacsim.core.nodes-5.10.15] startup
+[7.933s] [ext: isaacsim.core.throttling-2.3.7] startup
+[7.945s] [ext: omni.kit.manipulator.viewport-107.0.1] startup
+[7.952s] [ext: omni.graph.visualization.nodes-2.1.4] startup
+[8.032s] [ext: omni.kit.window.extensions-1.7.0] startup
+[8.051s] [ext: isaacsim.gui.components-1.8.9] startup
+[8.067s] [ext: isaacsim.examples.base-1.3.4] startup
+[8.077s] [ext: omni.kit.widget.zoombar-1.0.7] startup
+[8.081s] [ext: omni.kit.browser.core-2.3.18] startup
+[8.096s] [ext: omni.kit.browser.folder.core-2.0.3] startup
+[8.114s] [ext: omni.kit.widget.stage_icons-1.0.8] startup
+[8.119s] [ext: omni.kit.window.stage-2.6.4] startup
+[8.130s] [ext: omni.kit.menu.stage-1.2.7] startup
+[8.134s] [ext: omni.kit.usd.collect-3.0.7] startup
+[8.143s] [ext: omni.kit.widget.prompt-1.0.7] startup
+[8.146s] [ext: omni.kit.tool.collect-2.3.0] startup
+[8.156s] [ext: isaacsim.examples.browser-0.3.4] startup
+[8.167s] [ext: omni.kit.search.files-1.0.4] startup
+[8.170s] [ext: omni.kit.widget.calendar-1.0.9] startup
+[8.175s] [ext: omni.kit.widget.extended_searchfield-1.0.31] startup
+[8.204s] [ext: omni.simready.content.browser-0.3.10] startup
+[8.503s] [ext: isaacsim.gui.content_browser-0.5.1] startup
+[8.514s] [ext: omni.kit.selection-0.1.6] startup
+[8.518s] [ext: isaacsim.gui.menu-2.10.12] startup
+[8.546s] [ext: isaacsim.gui.property-1.6.4] startup
+[8.567s] [ext: omni.kit.viewport.actions-110.1.1] startup
+[8.577s] [ext: omni.kit.viewport.menubar.display-110.0.0] startup
+[8.582s] [ext: isaacsim.gui.sensors.icon-2.2.4] startup
+[8.595s] [ext: omni.behavior.scripting.core-110.4.0] startup
+[8.607s] [ext: isaacsim.replicator.behavior-1.6.2] startup
+[8.627s] [ext: isaacsim.replicator.experimental.domain_randomization-1.2.12] startup
+[8.703s] [ext: isaacsim.replicator.domain_randomization-1.2.4] startup
+[8.928s] [ext: isaacsim.replicator.writers-1.5.7] startup
+[9.037s] [ext: isaacsim.robot.experimental.wheeled_robots-0.2.17] startup
+[9.098s] [ext: isaacsim.robot.surface_gripper-3.7.1] startup
+[9.159s] [ext: isaacsim.robot.manipulators-3.4.5] startup
+[9.224s] [ext: isaacsim.robot.policy.examples-7.2.3] startup
+[9.322s] [ext: isaacsim.robot.wheeled_robots-5.2.5] startup
+[9.336s] [ext: isaacsim.robot.wheeled_robots.nodes-0.1.14] startup
+[9.420s] [ext: isaacsim.robot_motion.lula-4.1.4] startup
+[9.444s] [ext: isaacsim.robot_motion.motion_generation-9.0.0] startup
+[9.467s] [ext: omni.kit.numpy.common-0.1.3] startup
+[9.471s] [ext: omni.rtx.spg-0.4.0] startup
+[9.486s] [ext: omni.sensors.nv.camera-1.4.0] startup
+[9.519s] [ext: isaacsim.sensors.camera-1.7.13] startup
+[9.582s] [ext: isaacsim.sensors.experimental.physics-4.0.0] startup
+[9.607s] [ext: omni.sensors.net-1.4.0] startup
+[9.631s] [ext: omni.sensors.nv.common-3.4.0] startup
+[9.668s] [ext: omni.sensors.nv.materials-2.4.0] startup
+[9.683s] [ext: omni.sensors.nv.acoustic-3.4.0] startup
+[9.695s] [ext: omni.sensors.nv.ids-2.4.0] startup
+[9.704s] [ext: omni.sensors.nv.lidar-3.4.0] startup
+[9.717s] [ext: omni.sensors.nv.radar-3.4.0] startup
+[9.731s] [ext: isaacsim.sensors.experimental.rtx-2.0.1] startup
+[10.225s] [ext: isaacsim.sensors.physics.nodes-1.6.2] startup
+[10.256s] [ext: isaacsim.util.debug_draw-3.2.8] startup
+[10.276s] [ext: isaacsim.sensors.physx-2.5.7] startup
+[10.302s] [ext: isaacsim.sensors.rtx-15.17.5] startup
+[10.338s] [ext: isaacsim.simulation_app-2.19.0] startup
+[10.339s] [ext: omni.anim.curve.core-1.6.1] startup
+[10.370s] [ext: omni.graph.ui_nodes-2.11.2] startup
+[10.474s] [ext: omni.kit.manipulator.camera-110.1.1] startup
+[10.485s] [ext: omni.kit.manipulator.selector-1.1.4] startup
+[10.490s] [ext: omni.kit.manipulator.transform-107.0.1] startup
+[10.504s] [ext: omni.kit.widget.toolbar-2.1.0] startup
+[10.523s] [ext: omni.kit.manipulator.tool.snap-1.5.15] startup
+[10.538s] [ext: omni.kit.viewport.manipulator.transform-107.0.4] startup
+[10.544s] [ext: omni.kit.manipulator.prim.core-108.0.2] startup
+[10.562s] [ext: omni.kit.manipulator.prim.usd-107.0.3] startup
+[10.566s] [ext: omni.kit.manipulator.prim-108.0.0] startup
+[10.566s] [ext: omni.kit.manipulator.selection-110.1.0] startup
+[10.570s] [ext: omni.kit.menu.create-2.0.2] startup
+[10.575s] [ext: omni.kit.property.audio-1.0.18] startup
+[10.587s] [ext: omni.kit.property.camera-1.0.14] startup
+[10.591s] [ext: omni.kit.property.geometry-2.1.2] startup
+[10.600s] [ext: omni.kit.property.light-1.0.16] startup
+[10.759s] [ext: omni.kit.property.material-1.15.1] startup
+[10.782s] [ext: omni.kit.property.render-1.2.2] startup
+[10.786s] [ext: omni.kit.property.transform-1.6.13] startup
+[10.797s] [ext: omni.kit.property.bundle-1.5.3] startup
+[10.802s] [ext: omni.kit.usdz_export-1.1.1] startup
+[10.808s] [ext: omni.kit.tool.asset_importer-6.0.4] startup
+[10.828s] [ext: omni.kit.ui.actions-1.0.5] startup
+[10.833s] [ext: omni.kit.viewport.menubar.camera-107.0.16] startup
+[10.849s] [ext: omni.kit.viewport.menubar.lighting-107.3.4] startup
+[10.857s] [ext: omni.kit.viewport.menubar.render-110.1.1] startup
+[10.866s] [ext: omni.kit.viewport.menubar.settings-110.0.2] startup
+[10.880s] [ext: omni.kit.window.console-1.1.12] startup
+[10.888s] [ext: omni.kit.window.status_bar-0.1.11] startup
+[10.891s] [ext: omni.kit.window.toolbar-3.0.3] startup
+[10.896s] [ext: omni.ocio-0.1.1] startup
+[10.900s] [ext: omni.physx.commands-110.4.4] startup
+[10.907s] [ext: omni.replicator.replicator_yaml-2.0.12] startup
+[10.978s] [ext: omni.rtx.window.settings-0.8.5] startup
+[10.992s] [ext: omni.rtx.settings.core-0.7.2] startup
+[11.001s] [ext: omni.usd.metrics.assembler.ui-110.1.3] startup
+[11.018s] [ext: semantics.schema.editor-2.0.2] startup
+[11.026s] [ext: semantics.schema.property-2.0.2] startup
+[11.031s] [ext: omni.kit.menu.common-2.0.2] startup
+[11.035s] [ext: isaacsim.exp.base-6.2.0] startup
+[11.035s] [ext: isaacsim.exp.base.python-6.2.0] startup
+[11.040s] Simulation App Starting
+2026-11-23T12:23:21Z [10,984ms] [Warning] [carb.omniclient.plugin]  Main: core: Core::getServerInfo: rejecting empty URL as invalid
+[15.308s] Simulation App Startup Complete
+[15.326s] app ready
+2026-11-23T12:23:32Z [22,446ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/gripper_center has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:32Z [22,447ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/world has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:32Z [22,447ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/Link1 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:32Z [22,447ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/tool0 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:35Z [25,171ms] [Warning] [omni.physx.plugin] Detected an articulation at /World/Kawasaki with more than 4 velocity iterations being added to a TGS scene.The related behavior changed recently, please consult the changelog. This warning will only print once.
+2026-11-23T12:23:35Z [25,478ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/gripper_center has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:35Z [25,479ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/world has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:35Z [25,479ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/Link1 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:35Z [25,479ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/tool0 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [25,808ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/gripper_center has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [25,809ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/world has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [25,809ms] [Warning] [omni.physx.plugin] The rigid body at /Starting kit application with the following args:  ['C:\\isaacsim-6.2\\exts\\isaacsim.simulation_app\\isaacsim\\simulation_app\\simulation_app.py', 'C:\\isaacsim-6.2\\apps/isaacsim.exp.base.python.kit', '--/app/tokens/exe-path=C:\\isaacsim-6.2\\kit', '--/persistent/app/viewport/displayOptions=3094', '--/rtx/materialDb/syncLoads=True', '--/rtx/hydra/materialSyncLoads=True', '--/omni/kit/plugin/syncUsdLoads=True', '--/app/renderer/resolution/width=1280', '--/app/renderer/resolution/height=720', '--/app/window/width=1440', '--/app/window/height=900', '--/renderer/multiGpu/enabled=True', '--/app/fastShutdown=True', '--/app/installSignalHandlers=0', '--ext-folder', 'C:\\isaacsim-6.2/exts', '--ext-folder', 'C:\\isaacsim-6.2/apps', '--/physics/cudaDevice=0', '--/plugins/carb.tasking.plugin/threadCount=16', '--/plugins/omni.tbb.globalcontrol/maxThreadCount=16', '--portable', '--no-window', '--/app/window/hideUi=1']
+Passing the following args to the base kit application:  ['--headless', '--frames', '300', '--shot', 'C:/Users/asher/AppData/Local/Temp/claude/a70292d0f70cec4c/910ff5ad-7531-480b-8b44-5d2ee84b82fa/scratchpad/learn/raw_step07_ik.png']
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.3
+   Devices:
+     "cpu"      : "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel"
+     "cuda:0"   : "NVIDIA GeForce RTX 3070" (8 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     \\?\C:\Users\asher\AppData\Local\NVIDIA\warp\Cache\1.17.0
+E 0.050 0.2204 -0.7503 0.7131 -0.8667 0.5429
+E 0.100 0.1037 -0.7514 0.7261 -0.7502 0.6737
+E 0.150 0.0107 -0.7531 0.7391 -0.7629 0.7349
+E 0.200 0.0104 -0.7555 0.7520 -0.7641 0.7462
+E 0.250 0.0096 -0.7585 0.7647 -0.7663 0.7591
+E 0.300 0.0088 -0.7622 0.7773 -0.7692 0.7718
+E 0.350 0.0080 -0.7666 0.7896 -0.7727 0.7844
+E 0.400 0.0072 -0.7716 0.8017 -0.7768 0.7967
+E 0.450 0.0064 -0.7772 0.8135 -0.7815 0.8087
+E 0.500 0.0057 -0.7835 0.8250 -0.7869 0.8204
+E 0.550 0.0050 -0.7903 0.8362 -0.7928 0.8318
+E 0.600 0.0044 -0.7977 0.8469 -0.7993 0.8428
+E 0.650 0.0039 -0.8057 0.8573 -0.8064 0.8535
+E 0.700 0.0036 -0.8142 0.8673 -0.8140 0.8637
+E 0.750 0.0036 -0.8232 0.8768 -0.8221 0.8734
+E 0.800 0.0037 -0.8327 0.8858 -0.8306 0.8827
+E 0.850 0.0042 -0.8427 0.8943 -0.8396 0.8914
+E 0.900 0.0045 -0.8531 0.9023 -0.8494 0.8996
+E 0.950 0.0044 -0.8638 0.9097 -0.8601 0.9072
+E 1.000 0.0044 -0.8750 0.9165 -0.8712 0.9143
+E 1.050 0.0044 -0.8865 0.9228 -0.8826 0.9207
+E 1.100 0.0044 -0.8983 0.9284 -0.8943 0.9266
+E 1.150 0.0044 -0.9104 0.9334 -0.9063 0.9318
+E 1.200 0.0044 -0.9227 0.9378 -0.9185 0.9364
+E 1.250 0.0044 -0.9353 0.9415 -0.9310 0.9403
+E 1.300 0.0044 -0.9480 0.9445 -0.9437 0.9436
+E 1.350 0.0044 -0.9609 0.9469 -0.9565 0.9462
+E 1.400 0.0044 -0.9739 0.9486 -0.9695 0.9481
+E 1.450 0.0044 -0.9869 0.9497 -0.9825 0.9494
+E 1.500 0.0044 -1.0000 0.9500 -0.9956 0.9500
+E 1.550 0.0044 -1.0131 0.9497 -1.0087 0.9499
+E 1.600 0.0044 -1.0261 0.9486 -1.0217 0.9491
+E 1.650 0.0044 -1.0391 0.9469 -1.0347 0.9476
+E 1.700 0.0044 -1.0520 0.9445 -1.0477 0.9454
+E 1.750 0.0044 -1.0647 0.9415 -1.0604 0.9426
+E 1.800 0.0044 -1.0773 0.9378 -1.0730 0.9391
+E 1.850 0.0044 -1.0896 0.9334 -1.0855 0.9350
+E 1.900 0.0044 -1.1017 0.9284 -1.0976 0.9302
+E 1.950 0.0044 -1.1135 0.9228 -1.1096 0.9247
+E 2.000 0.0044 -1.1250 0.9165 -1.1212 0.9187
+E 2.050 0.0044 -1.1362 0.9097 -1.1324 0.9121
+E 2.100 0.0044 -1.1469 0.9023 -1.1434 0.9048
+E 2.150 0.0044 -1.1573 0.8943 -1.1539 0.8971
+E 2.200 0.0044 -1.1673 0.8858 -1.1640 0.8887
+E 2.250 0.0044 -1.1768 0.8768 -1.1736 0.8799
+E 2.300 0.0044 -1.1858 0.8673 -1.1828 0.8706
+E 2.350 0.0044 -1.1943 0.8573 -1.1915 0.8608
+E 2.400 0.0044 -1.2023 0.8469 -1.1996 0.8505
+E 2.450 0.0044 -1.2097 0.8362 -1.2072 0.8399
+E 2.500 0.0044 -1.2165 0.8250 -1.2143 0.8288
+E 2.550 0.0044 -1.2228 0.8135 -1.2207 0.8174
+E 2.600 0.0044 -1.2284 0.8017 -1.2266 0.8057
+E 2.650 0.0044 -1.2334 0.7896 -1.2318 0.7937
+E 2.700 0.0044 -1.2378 0.7773 -1.2364 0.7814
+E 2.750 0.0044 -1.2415 0.7647 -1.2403 0.7690
+E 2.800 0.0044 -1.2445 0.7520 -1.2436 0.7563
+E 2.850 0.0044 -1.2469 0.7391 -1.2462 0.7435
+E 2.900 0.0044 -1.2486 0.7261 -1.2481 0.7305
+E 2.950 0.0044 -1.2497 0.7131 -1.2494 0.7175
+E 3.000 0.0044 -1.2500 0.7000 -1.2500 0.7044
+E 3.050 0.0044 -1.2497 0.6869 -1.2499 0.6913
+E 3.100 0.0044 -1.2486 0.6739 -1.2491 0.6783
+E 3.150 0.0044 -1.2469 0.6609 -1.2476 0.6653
+E 3.200 0.0044 -1.2445 0.6480 -1.2454 0.6523
+E 3.250 0.0044 -1.2415 0.6353 -1.2426 0.6396
+E 3.300 0.0044 -1.2378 0.6227 -1.2391 0.6270
+E 3.350 0.0044 -1.2334 0.6104 -1.2349 0.6145
+E 3.400 0.0044 -1.2284 0.5983 -1.2301 0.6024
+E 3.450 0.0044 -1.2228 0.5865 -1.2247 0.5905
+E 3.500 0.0044 -1.2165 0.5750 -1.2187 0.5788
+E 3.550 0.0044 -1.2097 0.5638 -1.2120 0.5676
+E 3.600 0.0044 -1.2023 0.5531 -1.2048 0.5566
+E 3.650 0.0044 -1.1943 0.5427 -1.1970 0.5461
+E 3.700 0.0044 -1.1858 0.5327 -1.1887 0.5360
+E 3.750 0.0044 -1.1768 0.5232 -1.1799 0.5264
+E 3.800 0.0044 -1.1673 0.5142 -1.1705 0.5172
+E 3.850 0.0044 -1.1573 0.5057 -1.1607 0.5085
+E 3.900 0.0044 -1.1469 0.4977 -1.1505 0.5004
+E 3.950 0.0044 -1.1362 0.4903 -1.1398 0.4928
+E 4.000 0.0044 -1.1250 0.4835 -1.1288 0.4857
+E 4.050 0.0044 -1.1135 0.4772 -1.1174 0.4793
+E 4.100 0.0044 -1.1017 0.4716 -1.1057 0.4734
+E 4.150 0.0044 -1.0896 0.4666 -1.0937 0.4682
+E 4.200 0.0044 -1.0773 0.4622 -1.0814 0.4636
+E 4.250 0.0044 -1.0647 0.4585 -1.0689 0.4597
+E 4.300 0.0044 -1.0520 0.4555 -1.0563 0.4564
+E 4.350 0.0044 -1.0391 0.4531 -1.0434 0.4538
+E 4.400 0.0044 -1.0261 0.4514 -1.0305 0.4519
+E 4.450 0.0044 -1.0131 0.4503 -1.0175 0.4506
+E 4.500 0.0044 -1.0000 0.4500 -1.0044 0.4500
+E 4.550 0.0044 -0.9869 0.4503 -0.9913 0.4501
+E 4.600 0.0044 -0.9739 0.4514 -0.9782 0.4509
+E 4.650 0.0044 -0.9609 0.4531 -0.9652 0.4524
+E 4.700 0.0044 -0.9480 0.4555 -0.9523 0.4546
+E 4.750 0.0044 -0.9353 0.4585 -0.9395 0.4574
+E 4.800 0.0044 -0.9227 0.4622 -0.9269 0.4609
+E 4.850 0.0044 -0.9104 0.4666 -0.9145 0.4651
+E 4.900 0.0044 -0.8983 0.4716 -0.9023 0.4699
+E 4.950 0.0044 -0.8865 0.4772 -0.8904 0.4753
+E 5.000 0.0044 -0.8750 0.4835 -0.8788 0.4813
+E 5.050 0.0044 -0.8638 0.4903 -0.8675 0.4880
+E 5.100 0.0044 -0.8531 0.4977 -0.8566 0.4952
+E 5.150 0.0044 -0.8427 0.5057 -0.8461 0.5030
+E 5.200 0.0044 -0.8327 0.5142 -0.8360 0.5113
+E 5.250 0.0044 -0.8232 0.5232 -0.8264 0.5201
+E 5.300 0.0044 -0.8142 0.5327 -0.8172 0.5295
+E 5.350 0.0044 -0.8057 0.5427 -0.8085 0.5393
+E 5.400 0.0044 -0.7977 0.5531 -0.8004 0.5495
+E 5.450 0.0044 -0.7903 0.5638 -0.7928 0.5602
+E 5.500 0.0044 -0.7835 0.5750 -0.7857 0.5712
+E 5.550 0.0044 -0.7772 0.5865 -0.7793 0.5826
+E 5.600 0.0044 -0.7716 0.5983 -0.7734 0.5943
+E 5.650 0.0044 -0.7666 0.6104 -0.7682 0.6063
+E 5.700 0.0044 -0.7622 0.6227 -0.7636 0.6186
+E 5.750 0.0044 -0.7585 0.6353 -0.7597 0.6310
+E 5.800 0.0044 -0.7555 0.6480 -0.7564 0.6437
+E 5.850 0.0044 -0.7531 0.6609 -0.7538 0.6565
+E 5.900 0.0044 -0.7514 0.6739 -0.7519 0.6695
+E 5.950 0.0044 -0.7503 0.6869 -0.7506 0.6825
+E 6.000 0.0044 -0.7500 0.7000 -0.7500 0.6956
+E 6.050 0.0044 -0.7503 0.7131 -0.7501 0.7087
+E 6.100 0.0044 -0.7514 0.7261 -0.7509 0.7217
+E 6.150 0.0044 -0.7531 0.7391 -0.7524 0.7347
+E 6.200 0.0044 -0.7555 0.7520 -0.7546 0.7476
+E 6.250 0.0044 -0.7585 0.7647 -0.7574 0.7604
+E 6.300 0.0044 -0.7622 0.7773 -0.7609 0.7730
+E 6.350 0.0044 -0.7666 0.7896 -0.7650 0.7855
+E 6.400 0.0044 -0.7716 0.8017 -0.7698 0.7976
+E 6.450 0.0044 -0.7772 0.8135 -0.7753 0.8095
+E 6.500 0.0044 -0.7835 0.8250 -0.7813 0.8212
+E 6.550 0.0044 -0.7903 0.8362 -0.7879 0.8324
+E 6.600 0.0044 -0.7977 0.8469 -0.7952 0.8433
+E 6.650 0.0044 -0.8057 0.8573 -0.8030 0.8539
+E 6.700 0.0044 -0.8142 0.8673 -0.8113 0.8640
+E 6.750 0.0044 -0.8232 0.8768 -0.8201 0.8736
+E 6.800 0.0044 -0.8327 0.8858 -0.8294 0.8828
+E 6.850 0.0044 -0.8427 0.8943 -0.8392 0.8915
+E 6.900 0.0044 -0.8531 0.9023 -0.8495 0.8996
+E 6.950 0.0044 -0.8638 0.9097 -0.8601 0.9072
+E 7.000 0.0044 -0.8750 0.9165 -0.8712 0.9143
+E 7.050 0.0044 -0.8865 0.9228 -0.8826 0.9207
+E 7.100 0.0044 -0.8983 0.9284 -0.8943 0.9266
+E 7.150 0.0044 -0.9104 0.9334 -0.9063 0.9318
+E 7.200 0.0044 -0.9227 0.9378 -0.9185 0.9364
+E 7.250 0.0044 -0.9353 0.9415 -0.9310 0.9403
+E 7.300 0.0044 -0.9480 0.9445 -0.9437 0.9436
+E 7.350 0.0044 -0.9609 0.9469 -0.9565 0.9462
+E 7.400 0.0044 -0.9739 0.9486 -0.9695 0.9481
+E 7.450 0.0044 -0.9869 0.9497 -0.9825 0.9494
+E 7.500 0.0044 -1.0000 0.9500 -0.9956 0.9500
+E 7.550 0.0044 -1.0131 0.9497 -1.0087 0.9499
+E 7.600 0.0044 -1.0261 0.9486 -1.0217 0.9491
+E 7.650 0.0044 -1.0391 0.9469 -1.0347 0.9476
+E 7.700 0.0044 -1.0520 0.9445 -1.0477 0.9454
+E 7.750 0.0044 -1.0647 0.9415 -1.0604 0.9426
+E 7.800 0.0044 -1.0773 0.9378 -1.0730 0.9391
+E 7.850 0.0044 -1.0896 0.9334 -1.0855 0.9350
+E 7.900 0.0044 -1.1017 0.9284 -1.0976 0.9302
+E 7.950 0.0044 -1.1135 0.9228 -1.1096 0.9247
+E 8.000 0.0044 -1.1250 0.9165 -1.1212 0.9187
+E 8.050 0.0044 -1.1362 0.9097 -1.1324 0.9121
+E 8.100 0.0044 -1.1469 0.9023 -1.1434 0.9048
+E 8.150 0.0044 -1.1573 0.8943 -1.1539 0.8971
+E 8.200 0.0044 -1.1673 0.8858 -1.1640 0.8887
+E 8.250 0.0044 -1.1768 0.8768 -1.1736 0.8799
+E 8.300 0.0044 -1.1858 0.8673 -1.1828 0.8706
+E 8.350 0.0044 -1.1943 0.8573 -1.1915 0.8608
+E 8.400 0.0044 -1.2023 0.8469 -1.1996 0.8505
+E 8.450 0.0044 -1.2097 0.8362 -1.2072 0.8399
+E 8.500 0.0044 -1.2165 0.8250 -1.2143 0.8288
+E 8.550 0.0044 -1.2228 0.8135 -1.2207 0.8174
+E 8.600 0.0044 -1.2284 0.8017 -1.2266 0.8057
+E 8.650 0.0044 -1.2334 0.7896 -1.2318 0.7937
+E 8.700 0.0044 -1.2378 0.7773 -1.2364 0.7814
+E 8.750 0.0044 -1.2415 0.7647 -1.2403 0.7690
+E 8.800 0.0044 -1.2445 0.7520 -1.2436 0.7563
+E 8.850 0.0044 -1.2469 0.7391 -1.2462 0.7435
+E 8.900 0.0044 -1.2486 0.7261 -1.2481 0.7305
+E 8.950 0.0044 -1.2497 0.7131 -1.2494 0.7175
+STEP07 OK
+World/Kuka/Link1 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [25,809ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/tool0 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [26,127ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/gripper_center has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [26,128ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kawasaki/world has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [26,128ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/Link1 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+2026-11-23T12:23:36Z [26,129ms] [Warning] [omni.physx.plugin] The rigid body at /World/Kuka/tool0 has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used. Either specify correct values in the mass properties, or add collider(s) to any shape(s) that you wish to automatically compute mass properties for.
+[41.151s] Simulation App Shutting Down
